@@ -46,7 +46,8 @@
         Active,
         Archived,
         Sold,
-        Rented
+        Rented,
+        Pending
     }
 
     public enum InquiryStatus

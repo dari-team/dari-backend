@@ -54,14 +54,20 @@ namespace DARI_API
                         Encoding.UTF8.GetBytes(jwt["Secret"]))
                 };
             });
+            
+            builder.Services.AddControllers()
+                .AddJsonOptions(options =>
+                {
+                    options.JsonSerializerOptions.ReferenceHandler =
+                    System.Text.Json.Serialization.ReferenceHandler.IgnoreCycles;
+                });
 
-            builder.Services.AddControllers();
             builder.Services.AddEndpointsApiExplorer();
             builder.Services.AddSwaggerGen();
 
+
             var app = builder.Build();
 
-           
             using (var scope = app.Services.CreateScope())
             {
                 var services = scope.ServiceProvider;
@@ -81,7 +87,7 @@ namespace DARI_API
             }
 
             app.UseHttpsRedirection();
-
+            app.UseStaticFiles();
             app.UseAuthentication();   
             app.UseAuthorization();
 

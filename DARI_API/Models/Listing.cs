@@ -68,6 +68,6 @@ namespace DARI_API.Models
         public Address? Address { get; set; }
 
         public ICollection<Image>? Images { get; set; }
-
+        public bool IsFeatured { get; set; }
     }
 }
