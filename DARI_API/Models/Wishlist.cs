@@ -25,5 +25,7 @@ namespace DARI_API.Models
         public DateTime CreatedAt { get; set; }
 
         public ICollection<WishlistItem>? Items { get; set; }
+
+        public ICollection<WishlistCollaborator>? Collaborators { get; set; }
     }
 }

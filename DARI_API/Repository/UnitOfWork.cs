@@ -9,6 +9,7 @@ public class UnitOfWork : IUnitOfWork
     public IRepository<Image> Images { get; private set; }
     public IRepository<Wishlist> Wishlists { get; private set; }
     public IRepository<WishlistItem> WishlistItems { get; private set; }
+    public IRepository<WishlistCollaborator> WishlistCollaborators { get; private set; }
     public IRepository<Comment> Comments { get; private set; }
     public IRepository<Inquiry> Inquiries { get; private set; }
     public IRepository<Message> Messages { get; private set; }
@@ -23,6 +24,7 @@ public class UnitOfWork : IUnitOfWork
         Images = new Repository<Image>(_context);
         Wishlists = new Repository<Wishlist>(_context);
         WishlistItems = new Repository<WishlistItem>(_context);
+        WishlistCollaborators = new Repository<WishlistCollaborator>(_context);
         Comments = new Repository<Comment>(_context);
         Inquiries = new Repository<Inquiry>(_context);
         Messages = new Repository<Message>(_context);

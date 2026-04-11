@@ -103,7 +103,7 @@ namespace DARI_API.Controllers
             return Ok(inquiry);
         }
 
-        //CUSTOMER ONLY
+        // CUSTOMER ONLY
         [Authorize(Roles = "Customer")]
         [HttpGet("my")]
         public async Task<IActionResult> GetMyInquiries()
@@ -112,7 +112,32 @@ namespace DARI_API.Controllers
 
             var inquiries = await _unitOfWork.Inquiries.FindAsync(x => x.CustomerId == customerId);
 
-            return Ok(inquiries.OrderByDescending(x => x.CreatedAt));
+            var result = new List<object>();
+
+            foreach (var inquiry in inquiries.OrderByDescending(x => x.CreatedAt))
+            {
+                var messages = await _unitOfWork.Messages.FindAsync(x => x.InquiryId == inquiry.Id);
+
+                result.Add(new
+                {
+                    inquiry.Id,
+                    inquiry.CustomerId,
+                    inquiry.ListerId,
+                    inquiry.ListingId,
+                    inquiry.Status,
+                    inquiry.CreatedAt,
+                    Messages = messages.OrderBy(x => x.SentAt).Select(m => new
+                    {
+                        m.Id,
+                        m.SenderId,
+                        m.Text,
+                        m.SentAt,
+                        m.ReadAt
+                    })
+                });
+            }
+
+            return Ok(result);
         }
 
         //LISTER ONLY
@@ -124,7 +149,32 @@ namespace DARI_API.Controllers
 
             var inquiries = await _unitOfWork.Inquiries.FindAsync(x => x.ListerId == listerId);
 
-            return Ok(inquiries.OrderByDescending(x => x.CreatedAt));
+            var result = new List<object>();
+
+            foreach (var inquiry in inquiries.OrderByDescending(x => x.CreatedAt))
+            {
+                var messages = await _unitOfWork.Messages.FindAsync(x => x.InquiryId == inquiry.Id);
+
+                result.Add(new
+                {
+                    inquiry.Id,
+                    inquiry.CustomerId,
+                    inquiry.ListerId,
+                    inquiry.ListingId,
+                    inquiry.Status,
+                    inquiry.CreatedAt,
+                    Messages = messages.OrderBy(x => x.SentAt).Select(m => new
+                    {
+                        m.Id,
+                        m.SenderId,
+                        m.Text,
+                        m.SentAt,
+                        m.ReadAt
+                    })
+                });
+            }
+
+            return Ok(result);
         }
 
         //ALL
@@ -141,14 +191,29 @@ namespace DARI_API.Controllers
             if (inquiry.CustomerId != userId && inquiry.ListerId != userId)
                 return Forbid();
 
-            return Ok(inquiry);
+            var messages = await _unitOfWork.Messages.FindAsync(x => x.InquiryId == id);
+
+            return Ok(new
+            {
+                inquiry.Id,
+                inquiry.CustomerId,
+                inquiry.ListerId,
+                inquiry.ListingId,
+                inquiry.Status,
+                inquiry.CreatedAt,
+                Messages = messages.OrderBy(x => x.SentAt).Select(m => new
+                {
+                    m.Id,
+                    m.SenderId,
+                    m.Text,
+                    m.SentAt,
+                    m.ReadAt
+                })
+            });
         }
 
-
-        //LISTER ONLY
-        [Authorize(Roles = "Lister")]
-        [HttpPut("respond/{id}")]
-        public async Task<IActionResult> Respond(Guid id)
+        [HttpPost("{id}/messages")]
+        public async Task<IActionResult> SendMessage(Guid id, MessageViewModel model)
         {
             var userId = GetUserId();
 
@@ -157,28 +222,40 @@ namespace DARI_API.Controllers
             if (inquiry == null)
                 return NotFound();
 
-            if (inquiry.ListerId != userId)
+            if (inquiry.CustomerId != userId && inquiry.ListerId != userId)
                 return Forbid();
 
-            //checks status first
             if (inquiry.Status == InquiryStatus.Closed)
-                return BadRequest("Inquiry is already closed");
+                return BadRequest("Cannot send messages to a closed inquiry");
 
-            inquiry.Status = InquiryStatus.Responded;
+            var message = new Message
+            {
+                Id = Guid.NewGuid(),
+                InquiryId = id,
+                SenderId = userId,
+                Text = model.Text,
+                SentAt = DateTime.UtcNow
+            };
 
-            _unitOfWork.Inquiries.Update(inquiry);
+            await _unitOfWork.Messages.AddAsync(message);
 
-            //Notification without a real message
-            await CreateNotification(
-                inquiry.CustomerId,
-                "Inquiry Responded",
-                "A lister has overlooked your inquiry",
-                NotificationType.InquiryResponse
-            );
+            var recipientId = userId == inquiry.CustomerId ? inquiry.ListerId : inquiry.CustomerId;
 
+            var notification = new Notification
+            {
+                Id = Guid.NewGuid(),
+                UserId = recipientId,
+                Title = "New Message",
+                Body = model.Text,
+                Type = NotificationType.NewMessage,
+                Seen = false,
+                CreatedAt = DateTime.UtcNow
+            };
+
+            await _unitOfWork.Notifications.AddAsync(notification);
             await _unitOfWork.SaveAsync();
 
-            return Ok(inquiry);
+            return Ok(message);
         }
 
 
