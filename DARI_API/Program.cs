@@ -1,4 +1,3 @@
-
 using DARI_API.Models;
 using DARI_API.Seeder;
 using Microsoft.AspNetCore.Identity;
@@ -12,11 +11,10 @@ namespace DARI_API
 {
     public class Program
     {
-        public static async Task Main(string[] args)   
+        public static async Task Main(string[] args)
         {
             var builder = WebApplication.CreateBuilder(args);
 
-           
             builder.Services.AddDbContext<ApplicationDbContext>(options =>
                 options.UseSqlServer(
                     builder.Configuration.GetConnectionString("DefaultConnection")));
@@ -28,13 +26,13 @@ namespace DARI_API
                 .AddEntityFrameworkStores<ApplicationDbContext>()
                 .AddDefaultTokenProviders();
 
-
             var jwt = builder.Configuration.GetSection("JWT");
 
             builder.Services.AddAuthentication(options =>
             {
                 options.DefaultAuthenticateScheme = JwtBearerDefaults.AuthenticationScheme;
                 options.DefaultChallengeScheme = JwtBearerDefaults.AuthenticationScheme;
+                options.DefaultScheme = JwtBearerDefaults.AuthenticationScheme;
             })
             .AddJwtBearer(options =>
             {
@@ -54,33 +52,56 @@ namespace DARI_API
                         Encoding.UTF8.GetBytes(jwt["Secret"]))
                 };
             });
-            
+
             builder.Services.AddControllers()
                 .AddJsonOptions(options =>
                 {
                     options.JsonSerializerOptions.ReferenceHandler =
-                    System.Text.Json.Serialization.ReferenceHandler.IgnoreCycles;
+                        System.Text.Json.Serialization.ReferenceHandler.IgnoreCycles;
                 });
 
             builder.Services.AddEndpointsApiExplorer();
-            builder.Services.AddSwaggerGen();
-            
 
+            builder.Services.AddSwaggerGen(c =>
+            {
+                c.SwaggerDoc("v1", new OpenApiInfo { Title = "DARI API", Version = "v1" });
+
+                c.AddSecurityDefinition("Bearer", new OpenApiSecurityScheme
+                {
+                    Name = "Authorization",
+                    Type = SecuritySchemeType.Http,
+                    Scheme = "Bearer",
+                    BearerFormat = "JWT",
+                    In = ParameterLocation.Header,
+                    Description = "Paste your JWT token here (without 'Bearer ' prefix)."
+                });
+
+                c.AddSecurityRequirement(new OpenApiSecurityRequirement
+                {
+                    {
+                        new OpenApiSecurityScheme
+                        {
+                            Reference = new OpenApiReference
+                            {
+                                Type = ReferenceType.SecurityScheme,
+                                Id   = "Bearer"
+                            }
+                        },
+                        Array.Empty<string>()
+                    }
+                });
+            });
 
             var app = builder.Build();
 
             using (var scope = app.Services.CreateScope())
             {
                 var services = scope.ServiceProvider;
-
                 var roleManager = services.GetRequiredService<RoleManager<IdentityRole<Guid>>>();
-
                 await RoleSeeder.SeedRolesAsync(roleManager);
-
                 await SeedSuperAdmin.SeedAsync(services);
             }
 
-            
             if (app.Environment.IsDevelopment())
             {
                 app.UseSwagger();
@@ -89,7 +110,7 @@ namespace DARI_API
 
             app.UseHttpsRedirection();
             app.UseStaticFiles();
-            app.UseAuthentication();   
+            app.UseAuthentication();
             app.UseAuthorization();
 
             app.MapControllers();

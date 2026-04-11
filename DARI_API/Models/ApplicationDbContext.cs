@@ -90,6 +90,12 @@ namespace DARI_API.Models
                 .HasForeignKey(m => m.SenderId)
                 .OnDelete(DeleteBehavior.Restrict);
 
+            builder.Entity<Message>()
+                .HasOne(m => m.Inquiry)
+                .WithMany(i => i.Messages)
+                .HasForeignKey(m => m.InquiryId)
+                .OnDelete(DeleteBehavior.Cascade);
+
             builder.Entity<Comment>()
                 .HasOne(c => c.User)
                 .WithMany()
