@@ -56,7 +56,7 @@ namespace DARI_API.Models
         public decimal? LifestyleScore { get; set; }
 
         public bool IsApproved { get; set; }
-
+        
         public string? RejectionReason { get; set; }
 
         [Required]

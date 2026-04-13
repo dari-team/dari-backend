@@ -16,7 +16,7 @@ namespace DARI_API.Models
         // ==========================
         // DbSets
         // ==========================
-        public DbSet<Listing1> Listings { get; set; }
+
         public DbSet<Listing> Listings { get; set; }
         public DbSet<Address> Addresses { get; set; }
         public DbSet<Image> Images { get; set; }
