@@ -22,6 +22,7 @@ namespace DARI_API.Models
         public DbSet<Image> Images { get; set; }
         public DbSet<Wishlist> Wishlists { get; set; }
         public DbSet<WishlistItem> WishlistItems { get; set; }
+        public DbSet<WishlistCollaborator> WishlistCollaborators { get; set; }
         public DbSet<Comment> Comments { get; set; }
         public DbSet<Inquiry> Inquiries { get; set; }
         public DbSet<Message> Messages { get; set; }
@@ -112,6 +113,18 @@ namespace DARI_API.Models
                 .HasOne(wi => wi.Listing)
                 .WithMany()
                 .HasForeignKey(wi => wi.ListingId)
+                .OnDelete(DeleteBehavior.Restrict);
+
+            builder.Entity<WishlistCollaborator>()
+                .HasOne(wc => wc.Wishlist)
+                .WithMany(w => w.Collaborators)
+                .HasForeignKey(wc => wc.WishlistId)
+                .OnDelete(DeleteBehavior.Cascade);
+
+            builder.Entity<WishlistCollaborator>()
+                .HasOne(wc => wc.User)
+                .WithMany()
+                .HasForeignKey(wc => wc.UserId)
                 .OnDelete(DeleteBehavior.Restrict);
 
             builder.Entity<Comment>()

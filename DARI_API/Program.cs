@@ -21,6 +21,8 @@ namespace DARI_API
 
             builder.Services.AddScoped<IUnitOfWork, UnitOfWork>();
 
+            builder.Services.AddHttpClient("OpenAI");
+
             builder.Services
                 .AddIdentity<ApplicationUser, IdentityRole<Guid>>()
                 .AddEntityFrameworkStores<ApplicationDbContext>()

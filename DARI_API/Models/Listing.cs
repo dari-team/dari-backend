@@ -69,5 +69,7 @@ namespace DARI_API.Models
 
         public ICollection<Image>? Images { get; set; }
         public bool IsFeatured { get; set; }
+
+        public string? AiGeneratedTags { get; set; }
     }
 }
