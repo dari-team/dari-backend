@@ -2,6 +2,7 @@
 using Microsoft.AspNetCore.Identity.EntityFrameworkCore;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
+using System.Reflection.Emit;
 
 namespace DARI_API.Models
 {
@@ -17,7 +18,6 @@ namespace DARI_API.Models
         // DbSets
         // ==========================
         public DbSet<Listing> Listings { get; set; }
-        public DbSet<Listing> Listings { get; set; }
         public DbSet<Address> Addresses { get; set; }
         public DbSet<Image> Images { get; set; }
         public DbSet<Wishlist> Wishlists { get; set; }
@@ -27,6 +27,7 @@ namespace DARI_API.Models
         public DbSet<Inquiry> Inquiries { get; set; }
         public DbSet<Message> Messages { get; set; }
         public DbSet<Notification> Notifications { get; set; }
+        public DbSet<ListingView> ListingViews { get; set; }
         // ==========================
         // Model Configuration
         // ==========================
@@ -144,6 +145,18 @@ namespace DARI_API.Models
                 .WithMany()
                 .HasForeignKey(i => i.ListingId)
                 .OnDelete(DeleteBehavior.Restrict);
+
+            builder.Entity<ListingView>()
+                .HasOne(lv => lv.Listing)
+                .WithMany(l => l.Views)
+                .HasForeignKey(lv => lv.ListingId)
+                .OnDelete(DeleteBehavior.Cascade);
+
+            builder.Entity<ListingView>()
+                .HasOne(lv => lv.User)
+                .WithMany(u => u.ListingViews)
+                .HasForeignKey(lv => lv.UserId)
+                .OnDelete(DeleteBehavior.Restrict); 
 
         }
     }

@@ -32,6 +32,10 @@ namespace DARI_API.Models
 
         public DateTime? SubscriptionEndDate { get; set; }
 
+        public string? EmailVerificationCode { get; set; }
+
+        public DateTime? EmailVerificationExpiry { get; set; }
+
         [Required]
         public DateTime CreatedAt { get; set; }
 
@@ -53,5 +57,6 @@ namespace DARI_API.Models
         public ICollection<Inquiry>? ListerInquiries { get; set; }
 
         public ICollection<Notification>? Notifications { get; set; }
+        public ICollection<ListingView>? ListingViews { get; set; }
     }
 }

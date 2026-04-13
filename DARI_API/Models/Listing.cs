@@ -71,5 +71,6 @@ namespace DARI_API.Models
         public bool IsFeatured { get; set; }
 
         public string? AiGeneratedTags { get; set; }
+        public ICollection<ListingView>? Views { get; set; }
     }
 }

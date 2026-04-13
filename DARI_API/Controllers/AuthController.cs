@@ -8,6 +8,8 @@ using System.Security.Claims;
 using System.Text;
 using Google.Apis.Auth;
 using Microsoft.AspNetCore.Authorization;
+using DARI_API.IServicesLayer;
+
 
 [Route("api/[controller]")]
 [ApiController]
@@ -15,13 +17,15 @@ public class AuthController : ControllerBase
 {
     private readonly UserManager<ApplicationUser> _userManager;
     private readonly IConfiguration _configuration;
+    private readonly IServiceLayer _serviceLayer;
 
     public AuthController(
         UserManager<ApplicationUser> userManager,
-        IConfiguration configuration)
+        IConfiguration configuration,IServiceLayer serviceLayer)
     {
         _userManager = userManager;
         _configuration = configuration;
+        _serviceLayer = serviceLayer;
     }
 
     [HttpPost("register")]
@@ -46,6 +50,8 @@ public class AuthController : ControllerBase
             LicenseNumber = model.LicenseNumber,
 
             IsVerified = false,
+            EmailConfirmed = false, 
+
             MaxListings = model.UserType == UserType.Lister ? 10 : 0,
 
             CreatedAt = DateTime.UtcNow,
@@ -57,14 +63,26 @@ public class AuthController : ControllerBase
         if (!result.Succeeded)
             return BadRequest(result.Errors);
 
-        // Assign role based on type
-        var role = model.UserType.ToString(); // "Customer" / "Lister" / "Admin"
+        
+        var role = model.UserType.ToString();
         await _userManager.AddToRoleAsync(user, role);
 
-        return Ok(new
-        {
-            message = "User created successfully"
-        });
+
+        var code = new Random().Next(100000, 999999).ToString();
+
+        user.EmailVerificationCode = code;
+        user.EmailVerificationExpiry = DateTime.UtcNow.AddMinutes(10);
+
+        await _userManager.UpdateAsync(user);
+
+        
+        await _serviceLayer.SendEmailAsync(
+            user.Email,
+            "Verification Code",
+            $"Your verification code is: {code}"
+        );
+
+        return Ok("User created. Verification code sent.");
     }
 
     [HttpPost("login")]
@@ -74,6 +92,9 @@ public class AuthController : ControllerBase
 
         if (user == null)
             return Unauthorized("Invalid credentials");
+
+        if (!user.IsVerified)
+            return Unauthorized("Please verify your email first");
 
         var valid = await _userManager.CheckPasswordAsync(user, model.Password);
 
@@ -252,5 +273,57 @@ public class AuthController : ControllerBase
             signingCredentials: creds);
 
         return new JwtSecurityTokenHandler().WriteToken(token);
+    }
+
+    [HttpPost("verify-email")]
+    public async Task<IActionResult> VerifyEmail(VerifyEmailViewModel model)
+    {
+        var user = await _userManager.FindByEmailAsync(model.Email);
+
+        if (user == null)
+            return BadRequest("User not found");
+
+       
+        if (user.EmailVerificationCode != model.Code)
+            return BadRequest("Invalid code");
+
+        
+        if (user.EmailVerificationExpiry < DateTime.UtcNow)
+            return BadRequest("Code expired");
+
+        
+        user.IsVerified = true;
+        user.AccountStatus = AccountStatus.Active;
+
+        
+        user.EmailVerificationCode = null;
+        user.EmailVerificationExpiry = null;
+
+        await _userManager.UpdateAsync(user);
+
+        return Ok("Email verified successfully");
+    }
+    [HttpPost("resend-code")]
+    public async Task<IActionResult> ResendCode(string email)
+    {
+        var user = await _userManager.FindByEmailAsync(email);
+
+        if (user == null)
+            return BadRequest("User not found");
+
+        var code = new Random().Next(100000, 999999).ToString();
+
+        user.EmailVerificationCode = code;
+        user.EmailVerificationExpiry = DateTime.UtcNow.AddMinutes(10);
+
+        await _userManager.UpdateAsync(user);
+
+        await _serviceLayer.SendEmailAsync(
+            user.Email,
+            "Verification Code",
+            $"Your new code is: {code}"
+        );
+
+        return Ok("Code resent");
     }
 }

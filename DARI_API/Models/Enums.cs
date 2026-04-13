@@ -65,4 +65,11 @@
         ListingRejected,
         NewMatch
     }
+    public enum ViewSource
+    {
+        Search,
+        Direct,
+        Saved,
+        Map
+    }
 }

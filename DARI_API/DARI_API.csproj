@@ -4,6 +4,7 @@
     <TargetFramework>net8.0</TargetFramework>
     <Nullable>enable</Nullable>
     <ImplicitUsings>enable</ImplicitUsings>
+    <UserSecretsId>07cdabcb-a64f-463d-abc6-400fbb2dd1d4</UserSecretsId>
   </PropertyGroup>
 
   <ItemGroup>
@@ -25,9 +26,7 @@
   </ItemGroup>
 
   <ItemGroup>
-    <Folder Include="IServicesLayer\" />
     <Folder Include="NewFolder\" />
-    <Folder Include="ServicesLayer\" />
     <Folder Include="wwwroot\images\" />
   </ItemGroup>
 
