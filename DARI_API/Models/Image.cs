@@ -19,6 +19,7 @@ namespace DARI_API.Models
         public string Url { get; set; }
 
         [MaxLength(255)]
+        [Column(TypeName = "nvarchar(255)")]
         public string? Caption { get; set; }
 
         public int Width { get; set; }

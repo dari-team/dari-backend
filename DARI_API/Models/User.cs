@@ -21,9 +21,11 @@ namespace DARI_API.Models
         public ListerType? ListerType { get; set; }
 
         [MaxLength(100)]
+
         public string? LicenseNumber { get; set; }
 
         [MaxLength(255)]
+        [Column(TypeName = "nvarchar(255)")]
         public string? AgencyName { get; set; }
 
         public bool IsVerified { get; set; }
@@ -35,6 +37,12 @@ namespace DARI_API.Models
         public string? EmailVerificationCode { get; set; }
 
         public DateTime? EmailVerificationExpiry { get; set; }
+
+        public string? PasswordResetCode { get; set; }
+
+        public DateTime? PasswordResetExpiry { get; set; }
+
+        public int ResetCodeAttempts { get; set; }
 
         [Required]
         public DateTime CreatedAt { get; set; }

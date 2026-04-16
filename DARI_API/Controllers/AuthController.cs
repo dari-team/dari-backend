@@ -326,4 +326,102 @@ public class AuthController : ControllerBase
 
         return Ok("Code resent");
     }
+    [HttpPost("forgot-password")]
+    public async Task<IActionResult> ForgotPassword(ForgetPasswordViewModel model)
+    {
+        var user = await _userManager.FindByEmailAsync(model.Email);
+
+        
+        if (user == null)
+            return Ok("If the email exists, a reset code has been sent.");
+
+        var random = new Random();
+        var code = random.Next(100000, 999999).ToString();
+
+        user.PasswordResetCode = code;
+        user.PasswordResetExpiry = DateTime.UtcNow.AddMinutes(10);
+
+        await _userManager.UpdateAsync(user);
+
+        await _serviceLayer.SendEmailAsync(
+            user.Email,
+            "Password Reset Code",
+            $"Your password reset code is: {code}"
+        );
+
+        return Ok("If the email exists, a reset code has been sent.");
+    }
+
+    [HttpPost("reset-password")]
+    public async Task<IActionResult> ResetPassword(ResetPasswordViewModel model)
+    {
+        var user = await _userManager.FindByEmailAsync(model.Email);
+
+        if (user == null)
+            return BadRequest("Invalid request");
+
+        
+        if (user.PasswordResetCode != model.Code)
+            return BadRequest("Invalid code");
+
+        
+        if (user.PasswordResetExpiry < DateTime.UtcNow)
+            return BadRequest("Code expired");
+
+        
+        var removeResult = await _userManager.RemovePasswordAsync(user);
+        if (!removeResult.Succeeded)
+            return BadRequest(removeResult.Errors);
+
+        
+        var addResult = await _userManager.AddPasswordAsync(user, model.NewPassword);
+        if (!addResult.Succeeded)
+            return BadRequest(addResult.Errors);
+
+        
+        user.PasswordResetCode = null;
+        user.PasswordResetExpiry = null;
+        user.ResetCodeAttempts = 0;
+
+        await _userManager.UpdateAsync(user);
+
+        return Ok("Password reset successful");
+    }
+
+    [HttpPost("resend-reset-code")]
+    public async Task<IActionResult> ResendResetCode(ForgetPasswordViewModel model)
+    {
+        var user = await _userManager.FindByEmailAsync(model.Email);
+
+        if (user == null)
+            return Ok("If the email exists, a reset code has been sent.");
+
+   
+        if (user.PasswordResetExpiry.HasValue &&
+            user.PasswordResetExpiry > DateTime.UtcNow.AddMinutes(8))
+        {
+            return BadRequest("Please wait before requesting a new code.");
+        }
+
+        if (user.ResetCodeAttempts >= 5)
+            return BadRequest("Too many attempts. Try again later.");
+
+        user.ResetCodeAttempts++;
+
+        var random = new Random();
+        var code = random.Next(100000, 999999).ToString();
+
+        user.PasswordResetCode = code;
+        user.PasswordResetExpiry = DateTime.UtcNow.AddMinutes(10);
+
+        await _userManager.UpdateAsync(user);
+
+        await _serviceLayer.SendEmailAsync(
+            user.Email,
+            "Password Reset Code",
+            $"Your new password reset code is: {code}"
+        );
+
+        return Ok("If the email exists, a reset code has been sent.");
+    }
 }

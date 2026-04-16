@@ -20,9 +20,11 @@ namespace DARI_API.Models
 
         [Required]
         [MaxLength(255)]
+        [Column(TypeName = "nvarchar(255)")]
         public string Title { get; set; }
 
         [Required]
+        [Column(TypeName = "nvarchar(255)")]
         public string Description { get; set; }
 
         [Required]
@@ -39,6 +41,7 @@ namespace DARI_API.Models
         public PropertyType PropertyType { get; set; }
 
         [MaxLength(100)]
+        [Column(TypeName = "nvarchar(255)")]
         public string? Finishing { get; set; }
 
         [Required]
@@ -56,7 +59,8 @@ namespace DARI_API.Models
         public decimal? LifestyleScore { get; set; }
 
         public bool IsApproved { get; set; }
-        
+
+        [Column(TypeName = "nvarchar(255)")]
         public string? RejectionReason { get; set; }
 
         [Required]
@@ -70,6 +74,7 @@ namespace DARI_API.Models
         public ICollection<Image>? Images { get; set; }
         public bool IsFeatured { get; set; }
 
+        [Column(TypeName = "nvarchar(255)")]
         public string? AiGeneratedTags { get; set; }
         public ICollection<ListingView>? Views { get; set; }
     }

@@ -21,6 +21,7 @@ namespace DARI_API.Models
         public ApplicationUser Sender { get; set; }
 
         [Required]
+        [Column(TypeName = "nvarchar(255)")]
         public string Text { get; set; }
 
         [Required]

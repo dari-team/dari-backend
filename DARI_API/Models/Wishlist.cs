@@ -17,6 +17,7 @@ namespace DARI_API.Models
 
         [Required]
         [MaxLength(255)]
+        [Column(TypeName = "nvarchar(255)")]
         public string Name { get; set; }
 
         public bool IsShared { get; set; }

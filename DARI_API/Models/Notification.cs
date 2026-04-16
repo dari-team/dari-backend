@@ -17,9 +17,11 @@ namespace DARI_API.Models
 
         [Required]
         [MaxLength(255)]
+        [Column(TypeName = "nvarchar(255)")]
         public string Title { get; set; }
 
         [Required]
+        [Column(TypeName = "nvarchar(255)")]
         public string Body { get; set; }
 
         [Required]

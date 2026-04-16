@@ -15,15 +15,19 @@ namespace DARI_API.Models
         public Listing Listing { get; set; }
 
         [MaxLength(255)]
+        [Column(TypeName ="nvarchar(255)")]
         public string Street { get; set; }
 
         [MaxLength(100)]
+        [Column(TypeName = "nvarchar(255)")]
         public string City { get; set; }
 
         [MaxLength(100)]
+        [Column(TypeName = "nvarchar(255)")]
         public string Region { get; set; }
 
         [MaxLength(100)]
+        [Column(TypeName = "nvarchar(255)")]
         public string Country { get; set; }
 
         [Column(TypeName = "decimal(10,8)")]
