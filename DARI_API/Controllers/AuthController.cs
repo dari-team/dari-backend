@@ -115,34 +115,133 @@ public class AuthController : ControllerBase
     [HttpPost("google-login")]
     public async Task<IActionResult> GoogleLogin([FromBody] string idToken)
     {
-        var payload = await GoogleJsonWebSignature.ValidateAsync(idToken);
+        if (string.IsNullOrWhiteSpace(idToken))
+            return BadRequest("idToken is required");
+
+        GoogleJsonWebSignature.Payload payload;
+        try
+        {
+            payload = await ValidateGoogleToken(idToken);
+        }
+        catch (InvalidJwtException)
+        {
+            return Unauthorized("Invalid Google token");
+        }
 
         var user = await _userManager.FindByEmailAsync(payload.Email);
 
+        // New user — do NOT auto-create. Ask the frontend to collect
+        // account type + lister/agent fields via a profile-completion step.
         if (user == null)
         {
-            user = new ApplicationUser
+            return Ok(new
             {
-                Id = Guid.NewGuid(),
-                Email = payload.Email,
-                UserName = payload.Email,
-                Name = payload.Name,
+                needsProfile = true,
+                email = payload.Email,
+                name = payload.Name
+            });
+        }
 
-                AccountStatus = AccountStatus.Active,
-                UserType = UserType.Customer,
-
-                CreatedAt = DateTime.UtcNow,
-                UpdatedAt = DateTime.UtcNow,
-                EmailConfirmed = true
-            };
-
-            await _userManager.CreateAsync(user);
-            await _userManager.AddToRoleAsync(user, "Customer");
+        // User registered via email but never verified — Google has proven the
+        // email is theirs, so promote them to verified.
+        if (!user.IsVerified)
+        {
+            user.IsVerified = true;
+            user.AccountStatus = AccountStatus.Active;
+            user.EmailConfirmed = true;
+            await _userManager.UpdateAsync(user);
         }
 
         var token = await GenerateToken(user);
 
-        return Ok(new { token });
+        return Ok(new
+        {
+            token,
+            email = user.Email,
+            name = user.Name,
+            role = (await _userManager.GetRolesAsync(user)).FirstOrDefault()
+        });
+    }
+
+    [HttpPost("google-complete")]
+    public async Task<IActionResult> GoogleComplete(GoogleCompleteViewModel model)
+    {
+        if (!ModelState.IsValid)
+            return BadRequest(ModelState);
+
+        GoogleJsonWebSignature.Payload payload;
+        try
+        {
+            payload = await ValidateGoogleToken(model.IdToken);
+        }
+        catch (InvalidJwtException)
+        {
+            return Unauthorized("Invalid Google token");
+        }
+
+        // Race-safety: someone could have already completed registration for
+        // this email between /google-login and /google-complete. Just log them in.
+        var existing = await _userManager.FindByEmailAsync(payload.Email);
+        if (existing != null)
+        {
+            var tok = await GenerateToken(existing);
+            return Ok(new
+            {
+                token = tok,
+                email = existing.Email,
+                name = existing.Name,
+                role = (await _userManager.GetRolesAsync(existing)).FirstOrDefault()
+            });
+        }
+
+        var user = new ApplicationUser
+        {
+            Id = Guid.NewGuid(),
+            Email = payload.Email,
+            UserName = payload.Email,
+            Name = string.IsNullOrWhiteSpace(payload.Name) ? payload.Email : payload.Name,
+            PhoneNumber = model.PhoneNumber,
+
+            AccountStatus = AccountStatus.Active,
+            UserType = model.UserType,
+            CustomerType = model.CustomerType,
+            ListerType = model.ListerType,
+            AgencyName = model.AgencyName,
+            LicenseNumber = model.LicenseNumber,
+
+            MaxListings = model.UserType == UserType.Lister ? 10 : 0,
+
+            CreatedAt = DateTime.UtcNow,
+            UpdatedAt = DateTime.UtcNow,
+            EmailConfirmed = true,
+            IsVerified = true
+        };
+
+        // No password — Google is the credential. CreateAsync without a password
+        // leaves PasswordHash null; the user can later set one via forgot-password.
+        var created = await _userManager.CreateAsync(user);
+        if (!created.Succeeded)
+            return BadRequest(created.Errors);
+
+        await _userManager.AddToRoleAsync(user, model.UserType.ToString());
+
+        var token = await GenerateToken(user);
+        return Ok(new
+        {
+            token,
+            email = user.Email,
+            name = user.Name,
+            role = model.UserType.ToString()
+        });
+    }
+
+    private async Task<GoogleJsonWebSignature.Payload> ValidateGoogleToken(string idToken)
+    {
+        var clientId = _configuration["GoogleAuth:ClientId"];
+        var settings = new GoogleJsonWebSignature.ValidationSettings();
+        if (!string.IsNullOrWhiteSpace(clientId))
+            settings.Audience = new[] { clientId };
+        return await GoogleJsonWebSignature.ValidateAsync(idToken, settings);
     }
 
     [HttpPost("microsoft-login")]

@@ -1,6 +1,7 @@
 ﻿using DARI_API.Models;
 using DARI_API.ViewModels;
 using Microsoft.AspNetCore.Authorization;
+using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Mvc;
 using System.Security.Claims;
 
@@ -12,10 +13,48 @@ namespace DARI_API.Controllers
     public class InquiryController : Controller
     {
         private readonly IUnitOfWork _unitOfWork;
+        private readonly UserManager<ApplicationUser> _userManager;
 
-        public InquiryController(IUnitOfWork unitOfWork)
+        public InquiryController(IUnitOfWork unitOfWork, UserManager<ApplicationUser> userManager)
         {
             _unitOfWork = unitOfWork;
+            _userManager = userManager;
+        }
+
+        // Build the enriched shape shared by all list/detail endpoints.
+        private async Task<object> EnrichInquiry(Inquiry inquiry)
+        {
+            var listing  = await _unitOfWork.Listings.GetByIdAsync(inquiry.ListingId);
+            var address  = listing != null
+                ? (await _unitOfWork.Addresses.FindAsync(a => a.ListingId == listing.Id)).FirstOrDefault()
+                : null;
+            var customer = await _userManager.FindByIdAsync(inquiry.CustomerId.ToString());
+            var lister   = await _userManager.FindByIdAsync(inquiry.ListerId.ToString());
+            var messages = await _unitOfWork.Messages.FindAsync(m => m.InquiryId == inquiry.Id);
+
+            return new
+            {
+                inquiry.Id,
+                inquiry.CustomerId,
+                CustomerName = customer?.Name ?? "",
+                inquiry.ListerId,
+                ListerName = lister?.Name ?? "",
+                inquiry.ListingId,
+                ListingTitle  = listing?.Title ?? "",
+                ListingCity   = address?.City  ?? "",
+                ListingPrice  = listing?.Price ?? 0,
+                ListingType   = listing?.ListingType,
+                inquiry.Status,
+                inquiry.CreatedAt,
+                Messages = messages.OrderBy(m => m.SentAt).Select(m => new
+                {
+                    m.Id,
+                    m.SenderId,
+                    m.Text,
+                    m.SentAt,
+                    m.ReadAt
+                })
+            };
         }
 
         private Guid GetUserId()
@@ -113,30 +152,8 @@ namespace DARI_API.Controllers
             var inquiries = await _unitOfWork.Inquiries.FindAsync(x => x.CustomerId == customerId);
 
             var result = new List<object>();
-
             foreach (var inquiry in inquiries.OrderByDescending(x => x.CreatedAt))
-            {
-                var messages = await _unitOfWork.Messages.FindAsync(x => x.InquiryId == inquiry.Id);
-
-                result.Add(new
-                {
-                    inquiry.Id,
-                    inquiry.CustomerId,
-                    inquiry.ListerId,
-                    inquiry.ListingId,
-                    inquiry.Status,
-                    inquiry.CreatedAt,
-                    Messages = messages.OrderBy(x => x.SentAt).Select(m => new
-                    {
-                        m.Id,
-                        m.SenderId,
-                        m.Text,
-                        m.SentAt,
-                        m.ReadAt
-                    })
-                });
-            }
-
+                result.Add(await EnrichInquiry(inquiry));
             return Ok(result);
         }
 
@@ -146,34 +163,10 @@ namespace DARI_API.Controllers
         public async Task<IActionResult> GetReceivedInquiries()
         {
             var listerId = GetUserId();
-
             var inquiries = await _unitOfWork.Inquiries.FindAsync(x => x.ListerId == listerId);
-
             var result = new List<object>();
-
             foreach (var inquiry in inquiries.OrderByDescending(x => x.CreatedAt))
-            {
-                var messages = await _unitOfWork.Messages.FindAsync(x => x.InquiryId == inquiry.Id);
-
-                result.Add(new
-                {
-                    inquiry.Id,
-                    inquiry.CustomerId,
-                    inquiry.ListerId,
-                    inquiry.ListingId,
-                    inquiry.Status,
-                    inquiry.CreatedAt,
-                    Messages = messages.OrderBy(x => x.SentAt).Select(m => new
-                    {
-                        m.Id,
-                        m.SenderId,
-                        m.Text,
-                        m.SentAt,
-                        m.ReadAt
-                    })
-                });
-            }
-
+                result.Add(await EnrichInquiry(inquiry));
             return Ok(result);
         }
 
@@ -191,25 +184,7 @@ namespace DARI_API.Controllers
             if (inquiry.CustomerId != userId && inquiry.ListerId != userId)
                 return Forbid();
 
-            var messages = await _unitOfWork.Messages.FindAsync(x => x.InquiryId == id);
-
-            return Ok(new
-            {
-                inquiry.Id,
-                inquiry.CustomerId,
-                inquiry.ListerId,
-                inquiry.ListingId,
-                inquiry.Status,
-                inquiry.CreatedAt,
-                Messages = messages.OrderBy(x => x.SentAt).Select(m => new
-                {
-                    m.Id,
-                    m.SenderId,
-                    m.Text,
-                    m.SentAt,
-                    m.ReadAt
-                })
-            });
+            return Ok(await EnrichInquiry(inquiry));
         }
 
         [HttpPost("{id}/messages")]
