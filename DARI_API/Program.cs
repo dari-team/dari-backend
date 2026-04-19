@@ -8,6 +8,7 @@ using System.Text;
 using Microsoft.OpenApi.Models;
 using DARI_API.ServicesLayer;
 using DARI_API.IServicesLayer;
+using DARI_API.Services;
 
 namespace DARI_API
 {
@@ -24,7 +25,20 @@ namespace DARI_API
             builder.Services.AddScoped<IUnitOfWork, UnitOfWork>();
             builder.Services.AddScoped<IServiceLayer, ServiceLayer>();
 
-            builder.Services.AddHttpClient("OpenAI");
+            builder.Services.AddHttpClient("Groq");
+
+            builder.Services.Configure<CloudinaryOptions>(builder.Configuration.GetSection("Cloudinary"));
+            builder.Services.AddSingleton<ICloudinaryService, CloudinaryService>();
+
+            // CORS for Vite dev server (port 5173). Lock this down before prod.
+            builder.Services.AddCors(options =>
+            {
+                options.AddPolicy("DariDev", policy =>
+                    policy.WithOrigins("http://localhost:5173", "http://127.0.0.1:5173")
+                          .AllowAnyHeader()
+                          .AllowAnyMethod()
+                          .AllowCredentials());
+            });
 
             builder.Services
                 .AddIdentity<ApplicationUser, IdentityRole<Guid>>()
@@ -115,6 +129,7 @@ namespace DARI_API
 
             app.UseHttpsRedirection();
             app.UseStaticFiles();
+            app.UseCors("DariDev");
             app.UseAuthentication();
             app.UseAuthorization();
 

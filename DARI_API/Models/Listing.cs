@@ -24,8 +24,24 @@ namespace DARI_API.Models
         public string Title { get; set; }
 
         [Required]
-        [Column(TypeName = "nvarchar(255)")]
+        [Column(TypeName = "nvarchar(MAX)")]
         public string Description { get; set; }
+
+        [Column(TypeName = "nvarchar(MAX)")]
+        public string? AiGeneratedDescription { get; set; }
+
+        [MaxLength(255)]
+        [Column(TypeName = "nvarchar(255)")]
+        public string? AiStandardizedFinishing { get; set; }
+
+        [Column(TypeName = "nvarchar(MAX)")]
+        public string? LifestyleScoreBreakdown { get; set; }
+
+        public DateTime? LifestyleScoreCalculatedAt { get; set; }
+
+        [MaxLength(500)]
+        [Column(TypeName = "nvarchar(500)")]
+        public string? CoverImageUrl { get; set; }
 
         [Required]
         [Column(TypeName = "decimal(15,2)")]

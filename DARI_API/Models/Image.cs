@@ -20,6 +20,18 @@ namespace DARI_API.Models
 
         [MaxLength(255)]
         [Column(TypeName = "nvarchar(255)")]
+        public string? PublicId { get; set; }
+
+        [MaxLength(20)]
+        [Column(TypeName = "nvarchar(20)")]
+        public string? Format { get; set; }
+
+        public long? Bytes { get; set; }
+
+        public int SortOrder { get; set; }
+
+        [MaxLength(255)]
+        [Column(TypeName = "nvarchar(255)")]
         public string? Caption { get; set; }
 
         public int Width { get; set; }

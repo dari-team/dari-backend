@@ -20,7 +20,7 @@ namespace DARI_API.Controllers
         {
             _configuration = configuration;
             _unitOfWork = unitOfWork;
-            _httpClient = httpClientFactory.CreateClient("OpenAI");
+            _httpClient = httpClientFactory.CreateClient("Groq");
         }
 
         [Authorize(Roles = "Lister,Admin")]
@@ -31,6 +31,173 @@ namespace DARI_API.Controllers
 
             if (result == null)
                 return StatusCode(500, "AI generation failed");
+
+            return Ok(result);
+        }
+
+        [Authorize(Roles = "Lister,Admin")]
+        [HttpPost("standardize")]
+        public async Task<IActionResult> Standardize(StandardizeListingViewModel model)
+        {
+            if (string.IsNullOrWhiteSpace(model.RawText))
+                return BadRequest("Raw text is required.");
+
+            var apiKey = _configuration["Groq:ApiKey"];
+            var groqModel = _configuration["Groq:Model"] ?? "llama-3.3-70b-versatile";
+            var baseUrl = _configuration["Groq:BaseUrl"] ?? "https://api.groq.com/openai/v1";
+
+            if (string.IsNullOrEmpty(apiKey))
+                return StatusCode(500, "AI not configured.");
+
+            var prompt = $@"You are a real estate data extraction and standardization system. The listing text below may be in Arabic or English. Extract and normalize all fields.
+
+FINISHING NORMALIZATION RULES (map any variant to these exact values):
+- fully_finished: super lux, super luxury, سوبر لوكس, فاخر, fully finished, full finish, تشطيب كامل, متشطب
+- semi_finished: semi finished, نص تشطيب, نصف تشطيب
+- core_shell: core & shell, core and shell, هيكل, على الخريطة, red brick
+- furnished: furnished, مفروش, مفروشة, فرنيتشر
+- unfurnished: unfurnished, غير مفروش, بدون فرنيشة
+
+PROPERTY TYPE NORMALIZATION:
+- apartment: شقة, flat, apartment
+- villa: فيلا, villa, twinhouse, توين هاوس
+- studio: استوديو, studio
+- duplex: دوبلكس, duplex
+- penthouse: بنتهاوس, penthouse
+- office: مكتب, office, administrative
+- shop: محل, shop, retail
+- land: أرض, land, plot
+
+Listing text:
+{model.RawText}
+
+Reply ONLY with this exact JSON (use null for any field not mentioned):
+{{
+  ""title"": ""concise suggested title"",
+  ""propertyType"": ""apartment|villa|studio|duplex|penthouse|office|shop|land"",
+  ""listingType"": ""sale|rent"",
+  ""price"": 0,
+  ""bedrooms"": 0,
+  ""bathrooms"": 0,
+  ""areaSize"": 0,
+  ""finishing"": ""fully_finished|semi_finished|core_shell|furnished|unfurnished or null"",
+  ""city"": ""city name in English"",
+  ""description"": ""clean professional description without phone numbers or promotional spam"",
+  ""tags"": [""tag1"", ""tag2"", ""tag3"", ""tag4"", ""tag5""]
+}}";
+
+            var requestBody = new
+            {
+                model = groqModel,
+                messages = new[]
+                {
+                    new { role = "system", content = "You are a real estate data extraction system supporting Arabic and English. Always reply with JSON only. Normalize finishing and property type values to the exact enum strings provided." },
+                    new { role = "user", content = prompt }
+                },
+                max_tokens = 800,
+                temperature = 0.1,
+                response_format = new { type = "json_object" }
+            };
+
+            var json = System.Text.Json.JsonSerializer.Serialize(requestBody);
+            var request = new HttpRequestMessage(HttpMethod.Post, $"{baseUrl.TrimEnd('/')}/chat/completions");
+            request.Headers.Add("Authorization", $"Bearer {apiKey}");
+            request.Content = new System.Net.Http.StringContent(json, System.Text.Encoding.UTF8, "application/json");
+
+            var response = await _httpClient.SendAsync(request);
+            if (!response.IsSuccessStatusCode) return StatusCode(500, "AI extraction failed.");
+
+            var responseBody = await response.Content.ReadAsStringAsync();
+            using var doc = System.Text.Json.JsonDocument.Parse(responseBody);
+            var text = doc.RootElement.GetProperty("choices")[0].GetProperty("message").GetProperty("content").GetString();
+            if (text == null) return StatusCode(500, "Empty AI response.");
+
+            var result = System.Text.Json.JsonSerializer.Deserialize<StandardizeListingResponseViewModel>(text,
+                new System.Text.Json.JsonSerializerOptions { PropertyNameCaseInsensitive = true });
+
+            return Ok(result);
+        }
+
+        [Authorize(Roles = "Lister,Admin")]
+        [HttpPost("score-listing")]
+        public async Task<IActionResult> ScoreListing(ScoreListingViewModel model)
+        {
+            var apiKey = _configuration["Groq:ApiKey"];
+            var groqModel = _configuration["Groq:Model"] ?? "llama-3.3-70b-versatile";
+            var baseUrl = _configuration["Groq:BaseUrl"] ?? "https://api.groq.com/openai/v1";
+
+            if (string.IsNullOrEmpty(apiKey))
+                return StatusCode(500, "AI not configured.");
+
+            var prompt = $@"You are a real estate listing quality evaluator. Score this listing on 4 dimensions (0-100 each).
+
+Listing Data:
+- Title: {model.Title}
+- Description: {model.Description}
+- Property Type: {model.PropertyType}
+- Listing Type: {model.ListingType}
+- Price: {model.Price} EGP
+- Bedrooms: {model.Bedrooms}, Bathrooms: {model.Bathrooms}
+- Area: {model.AreaSize} m²
+- Finishing: {model.Finishing ?? "not specified"}
+- City: {model.City ?? "not specified"}
+- Photos uploaded: {model.PhotoCount}
+
+SCORING CRITERIA:
+
+1. completeness (0-100): Are all key fields provided? Title (10), description ≥50 chars (20), price > 0 (10), bedrooms & bathrooms (10), area (10), finishing (10), city (10), photos ≥3 (10), photos ≥6 bonus (+10). Deduct for missing fields.
+
+2. descriptionQuality (0-100): Is description professional, detailed (>100 chars = +20, >200 = +20), no phone numbers (-30), no ALL CAPS spam (-20), mentions key features (+20), Arabic or English properly written (+20)?
+
+3. credibility (0-100): Does price seem reasonable for Egypt (not 0, not suspiciously low)? Is data consistent (e.g. studio shouldn't have 5 bedrooms)? No contradictions? Score 100 if all good, deduct for issues.
+
+4. photoScore (0-100): 0 photos=0, 1-2=30, 3-4=60, 5-7=80, 8+=100.
+
+Calculate overallScore = (completeness*0.3 + descriptionQuality*0.3 + credibility*0.2 + photoScore*0.2) rounded to integer.
+
+verdict: ""poor"" if overall<40, ""fair"" if 40-59, ""good"" if 60-79, ""excellent"" if >=80.
+
+suggestions: list 2-4 specific actionable improvement tips based on weaknesses found. Keep them short (max 10 words each).
+
+Reply ONLY with this exact JSON:
+{{
+  ""overallScore"": 0,
+  ""completeness"": 0,
+  ""descriptionQuality"": 0,
+  ""credibility"": 0,
+  ""photoScore"": 0,
+  ""verdict"": ""poor|fair|good|excellent"",
+  ""suggestions"": [""tip1"", ""tip2""]
+}}";
+
+            var requestBody = new
+            {
+                model = groqModel,
+                messages = new[]
+                {
+                    new { role = "system", content = "You are a real estate listing quality auditor. Always reply with JSON only." },
+                    new { role = "user", content = prompt }
+                },
+                max_tokens = 600,
+                temperature = 0.1,
+                response_format = new { type = "json_object" }
+            };
+
+            var json = System.Text.Json.JsonSerializer.Serialize(requestBody);
+            var request = new HttpRequestMessage(HttpMethod.Post, $"{baseUrl.TrimEnd('/')}/chat/completions");
+            request.Headers.Add("Authorization", $"Bearer {apiKey}");
+            request.Content = new System.Net.Http.StringContent(json, System.Text.Encoding.UTF8, "application/json");
+
+            var response = await _httpClient.SendAsync(request);
+            if (!response.IsSuccessStatusCode) return StatusCode(500, "AI scoring failed.");
+
+            var responseBody = await response.Content.ReadAsStringAsync();
+            using var doc = System.Text.Json.JsonDocument.Parse(responseBody);
+            var text = doc.RootElement.GetProperty("choices")[0].GetProperty("message").GetProperty("content").GetString();
+            if (text == null) return StatusCode(500, "Empty AI response.");
+
+            var result = System.Text.Json.JsonSerializer.Deserialize<ScoreListingResponseViewModel>(text,
+                new System.Text.Json.JsonSerializerOptions { PropertyNameCaseInsensitive = true });
 
             return Ok(result);
         }
@@ -67,12 +234,37 @@ namespace DARI_API.Controllers
 
         private async Task<AIDescriptionResponseViewModel?> CallGroq(AIDescriptionRequestViewModel model)
         {
-            var apiKey = _configuration["OpenAI:ApiKey"];
+            var apiKey = _configuration["Groq:ApiKey"];
+            var model_ = _configuration["Groq:Model"] ?? "llama-3.3-70b-versatile";
+            var baseUrl = _configuration["Groq:BaseUrl"] ?? "https://api.groq.com/openai/v1";
 
             if (string.IsNullOrEmpty(apiKey))
                 return null;
 
-            var prompt = $@"
+            bool isEnglish = string.Equals(model.Language, "en", StringComparison.OrdinalIgnoreCase);
+            var prompt = isEnglish ? $@"
+You are a professional real estate copywriter. Write a compelling, unique property description in English.
+
+Property details:
+- Title: {model.Title}
+- Property type: {model.PropertyType}
+- Listing type: {model.ListingType}
+- Price: {model.Price} EGP
+- Bedrooms: {model.Bedrooms}
+- Bathrooms: {model.Bathrooms}
+- Area: {model.AreaSize} m²
+- Finishing: {model.Finishing ?? "not specified"}
+- Location: {model.Location ?? "not specified"}
+
+Requirements:
+1. Write a professional, engaging English description (3-4 sentences). Make it unique and vivid.
+2. Suggest 5 relevant English keyword tags for this property.
+
+Reply ONLY with JSON in this exact format:
+{{
+  ""description"": ""description here"",
+  ""tags"": [""tag1"", ""tag2"", ""tag3"", ""tag4"", ""tag5""]
+}}" : $@"
 أنت خبير عقاري محترف. مهمتك كتابة وصف عقاري احترافي وجذاب باللغة العربية.
 
 تفاصيل العقار:
@@ -87,7 +279,7 @@ namespace DARI_API.Controllers
 - الموقع: {model.Location ?? "غير محدد"}
 
 المطلوب:
-1. اكتب وصفاً احترافياً جذاباً للعقار باللغة العربية (3-4 جمل).
+1. اكتب وصفاً احترافياً جذاباً ومميزاً للعقار باللغة العربية (3-4 جمل). اجعل كل وصف فريداً ومختلفاً.
 2. اقترح قائمة من 5 تاجات (كلمات مفتاحية) مناسبة للعقار باللغة العربية.
 
 أجب فقط بصيغة JSON بالشكل التالي بدون أي نص إضافي:
@@ -98,13 +290,15 @@ namespace DARI_API.Controllers
 
             var requestBody = new
             {
-                model = "llama-3.3-70b-versatile",
+                model = model_,
                 messages = new[]
                 {
                     new
                     {
                         role = "system",
-                        content = "أنت خبير عقاري محترف يكتب أوصافاً عقارية احترافية باللغة العربية. أجب دائماً بصيغة JSON فقط."
+                        content = isEnglish
+                            ? "You are a professional real estate copywriter. Always reply with JSON only."
+                            : "أنت خبير عقاري محترف يكتب أوصافاً عقارية احترافية باللغة العربية. أجب دائماً بصيغة JSON فقط."
                     },
                     new
                     {
@@ -119,7 +313,7 @@ namespace DARI_API.Controllers
 
             var json = JsonSerializer.Serialize(requestBody);
 
-            var request = new HttpRequestMessage(HttpMethod.Post, "https://api.groq.com/openai/v1/chat/completions");
+            var request = new HttpRequestMessage(HttpMethod.Post, $"{baseUrl.TrimEnd('/')}/chat/completions");
             request.Headers.Add("Authorization", $"Bearer {apiKey}");
             request.Content = new StringContent(json, Encoding.UTF8, "application/json");
 

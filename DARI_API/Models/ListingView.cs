@@ -13,8 +13,9 @@ namespace DARI_API.Models
 
         [ForeignKey("ListingId")]
         public Listing Listing { get; set; }
-        [Required]
-        public Guid UserId { get; set; }
+
+        // Nullable — anonymous visitors still generate view rows (for traffic-source analytics)
+        public Guid? UserId { get; set; }
 
         [ForeignKey("UserId")]
         public ApplicationUser? User { get; set; }
