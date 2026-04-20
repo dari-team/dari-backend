@@ -1,6 +1,7 @@
-﻿using DARI_API.ViewModels;
+﻿using DARI_API.Models;
+using DARI_API.ViewModels;
 using Microsoft.AspNetCore.Mvc;
-using DARI_API.Models;
+using System.Security.Claims;
 
 namespace DARI_API.Controllers
 {
@@ -14,6 +15,11 @@ namespace DARI_API.Controllers
             _unitOfWork = unitOfWork;
         }
 
+        private Guid GetUserId()
+        {
+            return Guid.Parse(User.FindFirst(ClaimTypes.NameIdentifier).Value);
+        }
+
         [HttpGet]
         public async Task<IActionResult> GetAll()
         {
@@ -22,15 +28,16 @@ namespace DARI_API.Controllers
         }
 
         [HttpPost]
-        public async Task<IActionResult> create(ListingViewModel listing)
+        public async Task<IActionResult> Create(ListingViewModel listing)
         {
+            var userId = GetUserId();
             var data = new Listing
             {
                 Id = Guid.NewGuid(),
                 Title = listing.title,
                 Price = listing.price,
                 Description = listing.description,
-                ListerId = listing.ListerId,
+                ListerId = userId,
                 Bedrooms = listing.bedrooms,
                 Bathrooms = listing.bathrooms,
                 AreaSize = listing.areaSize,
@@ -106,8 +113,9 @@ namespace DARI_API.Controllers
         }
 
         [HttpGet("my/{userId}")]
-        public async Task<IActionResult> GetMyListings(Guid userId)
+        public async Task<IActionResult> GetMyListings()
         {
+            var userId = GetUserId();
             var listings = await _unitOfWork.Listings.FindAsync(x => x.ListerId == userId);
             return Ok(listings);
         }

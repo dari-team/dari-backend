@@ -7,7 +7,6 @@ namespace DARI_API.ViewModels
         public string title { get; set; }
         public decimal price { get; set; }
         public string description { get; set; }
-        public Guid ListerId { get; set; }
         public int bedrooms { get; set; }
         public int bathrooms { get; set; } 
         public decimal areaSize { get; set; }
