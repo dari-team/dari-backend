@@ -83,11 +83,25 @@ namespace DARI_API.Controllers
         [HttpGet]
         public async Task<IActionResult> GetMyWishlists()
         {
-            var userId    = GetUserId();
-            var wishlists = await _unitOfWork.Wishlists.FindAsync(x => x.OwnerId == userId);
+            var userId = GetUserId();
+
+            // Own wishlists
+            var ownedWishlists = await _unitOfWork.Wishlists.FindAsync(x => x.OwnerId == userId);
+
+            // Wishlists where this user is a collaborator
+            var collabEntries = await _unitOfWork.WishlistCollaborators.FindAsync(x => x.UserId == userId);
+            var collabWishlistIds = collabEntries.Select(c => c.WishlistId).ToHashSet();
+            var sharedWithMe = collabWishlistIds.Count > 0
+                ? await _unitOfWork.Wishlists.FindAsync(x => collabWishlistIds.Contains(x.Id))
+                : Enumerable.Empty<Wishlist>();
+
+            // Merge: own first, then shared — no duplicates
+            var allWishlists = ownedWishlists
+                .Concat(sharedWithMe.Where(w => w.OwnerId != userId))
+                .OrderByDescending(x => x.CreatedAt);
 
             var result = new List<object>();
-            foreach (var wl in wishlists.OrderByDescending(x => x.CreatedAt))
+            foreach (var wl in allWishlists)
                 result.Add(await EnrichWishlist(wl));
 
             return Ok(result);
@@ -123,8 +137,11 @@ namespace DARI_API.Controllers
             else
             {
                 wishlist = await _unitOfWork.Wishlists.GetByIdAsync(model.WishlistId!.Value);
-                if (wishlist == null)           return NotFound("Wishlist not found");
-                if (wishlist.OwnerId != userId) return Forbid();
+                if (wishlist == null) return NotFound("Wishlist not found");
+                // Owner OR collaborator may add items to a shared wishlist
+                var isCollaborator = (await _unitOfWork.WishlistCollaborators
+                    .FindAsync(c => c.WishlistId == wishlist.Id && c.UserId == userId)).Any();
+                if (wishlist.OwnerId != userId && !isCollaborator) return Forbid();
             }
 
             // If no listing provided → just create the wishlist

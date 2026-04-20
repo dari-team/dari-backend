@@ -97,6 +97,7 @@ namespace DARI_API.Controllers
                 PropertyType = req.PropertyType,
                 Finishing = req.Finishing,
                 ListingType = req.ListingType,
+                ListingKind = req.ListingKind ?? InferListingKind(req.PropertyType),
                 Status = ListingStatus.Pending,
                 ViewCount = 0,
                 IsApproved = false,  // Admin must approve before it goes live
@@ -220,6 +221,7 @@ namespace DARI_API.Controllers
             existing.PropertyType = req.PropertyType;
             existing.Finishing = req.Finishing;
             existing.ListingType = req.ListingType;
+            existing.ListingKind = req.ListingKind ?? InferListingKind(req.PropertyType);
             existing.UpdatedAt = DateTime.UtcNow;
 
             if (majorEdit && !isAdmin)
@@ -296,6 +298,7 @@ namespace DARI_API.Controllers
             decimal? maxArea,
             PropertyType? propertyType,
             ListingType? listingType,
+            ListingKind? listingKind,
             string? finishing,
             string? city,
             string? region)
@@ -309,7 +312,8 @@ namespace DARI_API.Controllers
             if (minArea != null)    q = q.Where(x => x.AreaSize >= minArea);
             if (maxArea != null)    q = q.Where(x => x.AreaSize <= maxArea);
             if (propertyType != null) q = q.Where(x => x.PropertyType == propertyType);
-            if (listingType != null)  q = q.Where(x => x.ListingType == listingType);
+            if (listingType  != null) q = q.Where(x => x.ListingType  == listingType);
+            if (listingKind  != null) q = q.Where(x => x.ListingKind  == listingKind);
             if (!string.IsNullOrWhiteSpace(finishing)) q = q.Where(x => x.Finishing == finishing);
             if (!string.IsNullOrWhiteSpace(city))   q = q.Where(x => x.Address != null && x.Address.City == city);
             if (!string.IsNullOrWhiteSpace(region)) q = q.Where(x => x.Address != null && x.Address.Region == region);
@@ -317,6 +321,11 @@ namespace DARI_API.Controllers
             var listings = await q.ToListAsync();
             return Ok(listings.Select(ListingResponse.From));
         }
+
+        // Infers Residential vs Commercial from property type numeric value.
+        // Office=5, Shop=6, Land=7 are Commercial; everything else is Residential.
+        private static ListingKind InferListingKind(PropertyType pt) =>
+            (int)pt >= 5 ? ListingKind.Commercial : ListingKind.Residential;
 
         [HttpGet("recommended")]
         public async Task<IActionResult> GetRecommended()

@@ -32,6 +32,10 @@ namespace DARI_API.ViewModels
         [Required]
         public ListingType ListingType { get; set; }
 
+        // Optional — client should send Residential=0 or Commercial=1.
+        // If omitted, backend infers from PropertyType.
+        public ListingKind? ListingKind { get; set; }
+
         [Required]
         public CreateAddressRequest Address { get; set; } = new();
 

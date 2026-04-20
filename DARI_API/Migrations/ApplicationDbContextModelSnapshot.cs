@@ -367,6 +367,9 @@ namespace DARI_API.Migrations
                     b.Property<Guid>("ListerId")
                         .HasColumnType("uniqueidentifier");
 
+                    b.Property<int?>("ListingKind")
+                        .HasColumnType("int");
+
                     b.Property<int>("ListingType")
                         .HasColumnType("int");
 

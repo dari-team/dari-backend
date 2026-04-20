@@ -63,6 +63,10 @@ namespace DARI_API.Models
         [Required]
         public ListingType ListingType { get; set; }
 
+        // Residential (apartments, villas, …) vs Commercial (offices, shops, land).
+        // Nullable so existing rows without the column stay valid after migration.
+        public ListingKind? ListingKind { get; set; }
+
         [Required]
         public ListingStatus Status { get; set; }
 

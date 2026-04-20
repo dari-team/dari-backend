@@ -15,6 +15,7 @@ namespace DARI_API.ViewModels
         public PropertyType PropertyType { get; set; }
         public string? Finishing { get; set; }
         public ListingType ListingType { get; set; }
+        public ListingKind? ListingKind { get; set; }
         public ListingStatus Status { get; set; }
         public bool IsApproved { get; set; }
         public bool IsFeatured { get; set; }
@@ -46,6 +47,7 @@ namespace DARI_API.ViewModels
             PropertyType = l.PropertyType,
             Finishing = l.Finishing,
             ListingType = l.ListingType,
+            ListingKind = l.ListingKind,
             Status = l.Status,
             IsApproved = l.IsApproved,
             IsFeatured = l.IsFeatured,

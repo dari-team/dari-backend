@@ -9,7 +9,7 @@ using Microsoft.EntityFrameworkCore;
 namespace DARI_API.Controllers
 {
     [ApiController]
-    [Route("api")]
+    [Route("api/dashboard")]
     public class DashboardController : ControllerBase
     {
         private readonly IUnitOfWork _unitOfWork;
@@ -24,7 +24,7 @@ namespace DARI_API.Controllers
         }
 
         [Authorize(Roles = "Admin,Lister")]
-        [HttpGet("agent/stats")]
+        [HttpGet("stats")]
         public async Task<IActionResult> GetAgentStats()
         {
             var userId = User.FindFirstValue(ClaimTypes.NameIdentifier);
@@ -53,7 +53,7 @@ namespace DARI_API.Controllers
         }
 
         [Authorize(Roles = "Admin,Lister")]
-        [HttpGet("agent/listings/{id}/analytics")]
+        [HttpGet("listings/{id}/analytics")]
         public async Task<IActionResult> GetListingAnalytics(Guid id)
         {
             var listing = await _unitOfWork.Listings.GetByIdAsync(id);

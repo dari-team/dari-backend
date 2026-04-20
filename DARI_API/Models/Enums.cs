@@ -40,6 +40,12 @@
         ForRent
     }
 
+    public enum ListingKind
+    {
+        Residential = 0,
+        Commercial  = 1
+    }
+
     public enum ListingStatus
     {
         Draft,
