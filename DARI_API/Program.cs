@@ -31,6 +31,13 @@ namespace DARI_API
                 .AddEntityFrameworkStores<ApplicationDbContext>()
                 .AddDefaultTokenProviders();
 
+            builder.Services.AddHttpClient("CVService", client =>
+            {
+                client.BaseAddress = new Uri("http://localhost:8000");
+                client.Timeout = TimeSpan.FromSeconds(30);
+            });
+            
+
             var jwt = builder.Configuration.GetSection("JWT");
 
             builder.Services.AddAuthentication(options =>

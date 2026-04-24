@@ -28,7 +28,10 @@ namespace DARI_API.Models
         [MaxLength(128)]
         public string? QdrantPointId { get; set; }
 
+
         [Required]
         public DateTime UploadedAt { get; set; }
+
+        public ImageEmbedding? ImageEmbedding { get; set; }
     }
 }

@@ -12,6 +12,7 @@ public interface IUnitOfWork : IDisposable
     IRepository<Inquiry> Inquiries { get; }
     IRepository<Message> Messages { get; }
     IRepository<Notification> Notifications { get; }
+    IRepository<ImageEmbedding> ImageEmbeddings { get; }
 
     Task<int> SaveAsync();
 }

@@ -14,6 +14,7 @@ public class UnitOfWork : IUnitOfWork
     public IRepository<Inquiry> Inquiries { get; private set; }
     public IRepository<Message> Messages { get; private set; }
     public IRepository<Notification> Notifications { get; private set; }
+    public IRepository<ImageEmbedding> ImageEmbeddings { get; private set; }
 
     public UnitOfWork(ApplicationDbContext context)
     {
@@ -29,6 +30,8 @@ public class UnitOfWork : IUnitOfWork
         Inquiries = new Repository<Inquiry>(_context);
         Messages = new Repository<Message>(_context);
         Notifications = new Repository<Notification>(_context);
+        ImageEmbeddings = new Repository<ImageEmbedding>(_context);
+
     }
 
     public async Task<int> SaveAsync()

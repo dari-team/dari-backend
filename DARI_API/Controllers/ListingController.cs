@@ -2,6 +2,7 @@
 using DARI_API.ViewModels;
 using Microsoft.AspNetCore.Mvc;
 using System.Security.Claims;
+using DARI_API.IServicesLayer;
 
 namespace DARI_API.Controllers
 {
@@ -10,9 +11,12 @@ namespace DARI_API.Controllers
     public class ListingController : Controller
     {
         private readonly IUnitOfWork _unitOfWork;
-        public ListingController(IUnitOfWork unitOfWork)
+        private readonly IServiceLayer _visualSearchService;
+        public ListingController(IUnitOfWork unitOfWork, IServiceLayer visualSearchService)
         {
             _unitOfWork = unitOfWork;
+            _visualSearchService = visualSearchService;
+
         }
 
         private Guid GetUserId()
@@ -210,6 +214,9 @@ namespace DARI_API.Controllers
 
             await _unitOfWork.Images.AddAsync(image);
             await _unitOfWork.SaveAsync();
+            var imageUrl = $"{Request.Scheme}://{Request.Host}{image.Url}";
+            _ = Task.Run(() => _visualSearchService.IndexImageAsync(image.Id, imageUrl));
+
             return Ok(image);
         }
     }
