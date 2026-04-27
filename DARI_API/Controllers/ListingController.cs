@@ -2,11 +2,9 @@ using DARI_API.Models;
 using DARI_API.ViewModels;
 using Microsoft.AspNetCore.Mvc;
 using System.Security.Claims;
-using DARI_API.Models;
 using DARI_API.Services;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.EntityFrameworkCore;
-using System.Security.Claims;
 
 namespace DARI_API.Controllers
 {
@@ -45,34 +43,17 @@ namespace DARI_API.Controllers
 
         [Authorize(Roles = "Lister,Admin")]
         [HttpPost]
-        public async Task<IActionResult> Create(ListingViewModel listing)
         public async Task<IActionResult> Create([FromBody] CreateListingRequest req)
         {
-            var userId = GetUserId();
-            var data = new Listing
-            // Auth: lister id from JWT sub claim
             var listerIdStr = User.FindFirstValue(ClaimTypes.NameIdentifier);
             if (!Guid.TryParse(listerIdStr, out var listerId))
                 return Unauthorized("Invalid user token");
 
-            // Photos required for real-estate listings
             if (req.Images == null || req.Images.Count < 3)
                 return BadRequest("At least 3 images are required.");
 
-            // Verify every image actually landed in Cloudinary (prevent client-fabricated URLs)
             foreach (var img in req.Images)
             {
-                Id = Guid.NewGuid(),
-                Title = listing.title,
-                Price = listing.price,
-                Description = listing.description,
-                ListerId = userId,
-                Bedrooms = listing.bedrooms,
-                Bathrooms = listing.bathrooms,
-                AreaSize = listing.areaSize,
-                PropertyType = listing.propertyType,
-                Finishing = listing.finishing,
-                ListingType = listing.listingType,
                 if (string.IsNullOrWhiteSpace(img.PublicId) || string.IsNullOrWhiteSpace(img.Url))
                     return BadRequest("Image missing publicId or url.");
 
@@ -100,7 +81,7 @@ namespace DARI_API.Controllers
                 ListingKind = req.ListingKind ?? InferListingKind(req.PropertyType),
                 Status = ListingStatus.Pending,
                 ViewCount = 0,
-                IsApproved = false,  // Admin must approve before it goes live
+                IsApproved = false,
                 IsFeatured = false,
                 CreatedAt = now,
                 UpdatedAt = now,
@@ -162,8 +143,6 @@ namespace DARI_API.Controllers
 
             listing.ViewCount++;
 
-            // Record analytics row (used by agent analytics endpoint).
-            // UserId is nullable — anonymous visitors still produce view rows.
             var userIdStr = User.FindFirstValue(ClaimTypes.NameIdentifier);
             Guid? userId = Guid.TryParse(userIdStr, out var uid) ? uid : (Guid?)null;
 
@@ -196,15 +175,11 @@ namespace DARI_API.Controllers
             if (existing == null)
                 return NotFound();
 
-            // Ownership guard — only the lister or an admin can edit
             var userIdStr = User.FindFirstValue(ClaimTypes.NameIdentifier);
             var isAdmin = User.IsInRole("Admin");
             if (!isAdmin && (!Guid.TryParse(userIdStr, out var userId) || userId != existing.ListerId))
                 return Forbid();
 
-            // Hybrid re-moderation: minor edits (price, description, finishing) stay live.
-            // Big structural edits (property type, listing type, bed/bath/area) flip back to pending.
-            // Admins can edit anything without re-moderation.
             bool majorEdit =
                 existing.PropertyType != req.PropertyType ||
                 existing.ListingType != req.ListingType ||
@@ -276,18 +251,6 @@ namespace DARI_API.Controllers
             return Ok(listings.Select(ListingResponse.From));
         }
 
-        [HttpGet("my/{userId}")]
-        public async Task<IActionResult> GetMyListings()
-        {
-            var userId = GetUserId();
-            var listings = await _unitOfWork.Listings.FindAsync(x => x.ListerId == userId);
-            return Ok(listings);
-            var listings = await ListingsWithRelations()
-                .Where(x => x.ListerId == userId)
-                .ToListAsync();
-            return Ok(listings.Select(ListingResponse.From));
-        }
-
         [HttpGet("filter")]
         public async Task<IActionResult> Filter(
             decimal? minPrice,
@@ -305,27 +268,22 @@ namespace DARI_API.Controllers
         {
             var q = ListingsWithRelations().Where(x => x.IsApproved);
 
-            if (minPrice != null)   q = q.Where(x => x.Price >= minPrice);
-            if (maxPrice != null)   q = q.Where(x => x.Price <= maxPrice);
-            if (bedrooms != null)   q = q.Where(x => x.Bedrooms >= bedrooms);   // "3+" semantics
-            if (bathrooms != null)  q = q.Where(x => x.Bathrooms >= bathrooms);
-            if (minArea != null)    q = q.Where(x => x.AreaSize >= minArea);
-            if (maxArea != null)    q = q.Where(x => x.AreaSize <= maxArea);
+            if (minPrice != null) q = q.Where(x => x.Price >= minPrice);
+            if (maxPrice != null) q = q.Where(x => x.Price <= maxPrice);
+            if (bedrooms != null) q = q.Where(x => x.Bedrooms >= bedrooms);
+            if (bathrooms != null) q = q.Where(x => x.Bathrooms >= bathrooms);
+            if (minArea != null) q = q.Where(x => x.AreaSize >= minArea);
+            if (maxArea != null) q = q.Where(x => x.AreaSize <= maxArea);
             if (propertyType != null) q = q.Where(x => x.PropertyType == propertyType);
-            if (listingType  != null) q = q.Where(x => x.ListingType  == listingType);
-            if (listingKind  != null) q = q.Where(x => x.ListingKind  == listingKind);
+            if (listingType != null) q = q.Where(x => x.ListingType == listingType);
+            if (listingKind != null) q = q.Where(x => x.ListingKind == listingKind);
             if (!string.IsNullOrWhiteSpace(finishing)) q = q.Where(x => x.Finishing == finishing);
-            if (!string.IsNullOrWhiteSpace(city))   q = q.Where(x => x.Address != null && x.Address.City == city);
+            if (!string.IsNullOrWhiteSpace(city)) q = q.Where(x => x.Address != null && x.Address.City == city);
             if (!string.IsNullOrWhiteSpace(region)) q = q.Where(x => x.Address != null && x.Address.Region == region);
 
             var listings = await q.ToListAsync();
             return Ok(listings.Select(ListingResponse.From));
         }
-
-        // Infers Residential vs Commercial from property type numeric value.
-        // Office=5, Shop=6, Land=7 are Commercial; everything else is Residential.
-        private static ListingKind InferListingKind(PropertyType pt) =>
-            (int)pt >= 5 ? ListingKind.Commercial : ListingKind.Residential;
 
         [HttpGet("recommended")]
         public async Task<IActionResult> GetRecommended()
@@ -343,7 +301,6 @@ namespace DARI_API.Controllers
         // Admin moderation
         // ──────────────────────────────────────────────────────────────────────────
 
-        // GET /api/Listing/pending — queue of listings awaiting approval
         [Authorize(Roles = "Admin")]
         [HttpGet("pending")]
         public async Task<IActionResult> GetPending()
@@ -355,7 +312,6 @@ namespace DARI_API.Controllers
             return Ok(listings.Select(ListingResponse.From));
         }
 
-        // POST /api/Listing/{id}/approve
         [Authorize(Roles = "Admin")]
         [HttpPost("{id}/approve")]
         public async Task<IActionResult> Approve(Guid id)
@@ -369,7 +325,6 @@ namespace DARI_API.Controllers
             listing.UpdatedAt = DateTime.UtcNow;
             _unitOfWork.Listings.Update(listing);
 
-            // Notify the lister
             await _unitOfWork.Notifications.AddAsync(new Notification
             {
                 Id = Guid.NewGuid(),
@@ -390,7 +345,6 @@ namespace DARI_API.Controllers
             public string? Reason { get; set; }
         }
 
-        // POST /api/Listing/{id}/reject  { reason: "..." }
         [Authorize(Roles = "Admin")]
         [HttpPost("{id}/reject")]
         public async Task<IActionResult> Reject(Guid id, [FromBody] RejectRequest? body)
@@ -422,5 +376,10 @@ namespace DARI_API.Controllers
             await _unitOfWork.SaveAsync();
             return Ok(ListingResponse.From(listing));
         }
+
+        // Infers Residential vs Commercial from property type numeric value.
+        // Office=5, Shop=6, Land=7 are Commercial; everything else is Residential.
+        private static ListingKind InferListingKind(PropertyType pt) =>
+            (int)pt >= 5 ? ListingKind.Commercial : ListingKind.Residential;
     }
 }
