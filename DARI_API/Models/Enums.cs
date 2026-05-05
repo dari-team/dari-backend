@@ -31,7 +31,9 @@
         Apartment,
         Villa,
         Townhouse,
-        Studio
+        Studio,
+        Duplex,
+        Penthouse
     }
 
     public enum ListingType

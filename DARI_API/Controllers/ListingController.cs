@@ -2,6 +2,7 @@ using DARI_API.Models;
 using DARI_API.ViewModels;
 using Microsoft.AspNetCore.Mvc;
 using System.Security.Claims;
+using DARI_API.IServicesLayer;
 using DARI_API.Services;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.EntityFrameworkCore;
@@ -15,12 +16,18 @@ namespace DARI_API.Controllers
         private readonly IUnitOfWork _unitOfWork;
         private readonly ICloudinaryService _cloudinary;
         private readonly ApplicationDbContext _db;
+        private readonly IServiceLayer _visualSearchService;
 
-        public ListingController(IUnitOfWork unitOfWork, ICloudinaryService cloudinary, ApplicationDbContext db)
+        public ListingController(
+            IUnitOfWork unitOfWork,
+            ICloudinaryService cloudinary,
+            ApplicationDbContext db,
+            IServiceLayer visualSearchService)
         {
             _unitOfWork = unitOfWork;
             _cloudinary = cloudinary;
             _db = db;
+            _visualSearchService = visualSearchService;
         }
 
         private Guid GetUserId()

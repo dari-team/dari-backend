@@ -4,6 +4,7 @@ using DARI_API.Models;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
 using Microsoft.EntityFrameworkCore.Metadata;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 
 #nullable disable
@@ -11,9 +12,11 @@ using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 namespace DARI_API.Migrations
 {
     [DbContext(typeof(ApplicationDbContext))]
-    partial class ApplicationDbContextModelSnapshot : ModelSnapshot
+    [Migration("20260424192841_addImageEmbedding")]
+    partial class addImageEmbedding
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder
@@ -228,16 +231,9 @@ namespace DARI_API.Migrations
                         .ValueGeneratedOnAdd()
                         .HasColumnType("uniqueidentifier");
 
-                    b.Property<long?>("Bytes")
-                        .HasColumnType("bigint");
-
                     b.Property<string>("Caption")
                         .HasMaxLength(255)
                         .HasColumnType("nvarchar(255)");
-
-                    b.Property<string>("Format")
-                        .HasMaxLength(20)
-                        .HasColumnType("nvarchar(20)");
 
                     b.Property<int>("Height")
                         .HasColumnType("int");
@@ -245,16 +241,9 @@ namespace DARI_API.Migrations
                     b.Property<Guid>("ListingId")
                         .HasColumnType("uniqueidentifier");
 
-                    b.Property<string>("PublicId")
-                        .HasMaxLength(255)
-                        .HasColumnType("nvarchar(255)");
-
                     b.Property<string>("QdrantPointId")
                         .HasMaxLength(128)
                         .HasColumnType("nvarchar(128)");
-
-                    b.Property<int>("SortOrder")
-                        .HasColumnType("int");
 
                     b.Property<DateTime>("UploadedAt")
                         .HasColumnType("datetime2");
@@ -336,18 +325,11 @@ namespace DARI_API.Migrations
                         .ValueGeneratedOnAdd()
                         .HasColumnType("uniqueidentifier");
 
-                    b.Property<string>("AiGeneratedDescription")
-                        .HasColumnType("nvarchar(MAX)");
-
                     b.Property<string>("AiGeneratedTags")
                         .HasColumnType("nvarchar(255)");
 
                     b.Property<decimal?>("AiQualityScore")
                         .HasColumnType("decimal(5,2)");
-
-                    b.Property<string>("AiStandardizedFinishing")
-                        .HasMaxLength(255)
-                        .HasColumnType("nvarchar(255)");
 
                     b.Property<decimal>("AreaSize")
                         .HasColumnType("decimal(10,2)");
@@ -358,16 +340,12 @@ namespace DARI_API.Migrations
                     b.Property<int>("Bedrooms")
                         .HasColumnType("int");
 
-                    b.Property<string>("CoverImageUrl")
-                        .HasMaxLength(500)
-                        .HasColumnType("nvarchar(500)");
-
                     b.Property<DateTime>("CreatedAt")
                         .HasColumnType("datetime2");
 
                     b.Property<string>("Description")
                         .IsRequired()
-                        .HasColumnType("nvarchar(MAX)");
+                        .HasColumnType("nvarchar(255)");
 
                     b.Property<string>("Finishing")
                         .HasMaxLength(100)
@@ -382,17 +360,8 @@ namespace DARI_API.Migrations
                     b.Property<decimal?>("LifestyleScore")
                         .HasColumnType("decimal(5,2)");
 
-                    b.Property<string>("LifestyleScoreBreakdown")
-                        .HasColumnType("nvarchar(MAX)");
-
-                    b.Property<DateTime?>("LifestyleScoreCalculatedAt")
-                        .HasColumnType("datetime2");
-
                     b.Property<Guid>("ListerId")
                         .HasColumnType("uniqueidentifier");
-
-                    b.Property<int?>("ListingKind")
-                        .HasColumnType("int");
 
                     b.Property<int>("ListingType")
                         .HasColumnType("int");
@@ -439,7 +408,7 @@ namespace DARI_API.Migrations
                     b.Property<int>("Source")
                         .HasColumnType("int");
 
-                    b.Property<Guid?>("UserId")
+                    b.Property<Guid>("UserId")
                         .HasColumnType("uniqueidentifier");
 
                     b.Property<DateTime>("ViewedAt")
@@ -832,7 +801,8 @@ namespace DARI_API.Migrations
                     b.HasOne("DARI_API.Models.ApplicationUser", "User")
                         .WithMany("ListingViews")
                         .HasForeignKey("UserId")
-                        .OnDelete(DeleteBehavior.Restrict);
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
 
                     b.Navigation("Listing");
 

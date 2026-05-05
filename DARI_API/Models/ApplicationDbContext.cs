@@ -28,6 +28,7 @@ namespace DARI_API.Models
         public DbSet<Message> Messages { get; set; }
         public DbSet<Notification> Notifications { get; set; }
         public DbSet<ListingView> ListingViews { get; set; }
+        public DbSet<ImageEmbedding> ImageEmbeddings { get; set; }
         // ==========================
         // Model Configuration
         // ==========================
@@ -156,7 +157,12 @@ namespace DARI_API.Models
                 .HasOne(lv => lv.User)
                 .WithMany(u => u.ListingViews)
                 .HasForeignKey(lv => lv.UserId)
-                .OnDelete(DeleteBehavior.Restrict); 
+                .OnDelete(DeleteBehavior.Restrict);
+
+            builder.Entity<ImageEmbedding>()
+                .HasOne(e => e.Image)
+                .WithOne(i => i.ImageEmbedding)
+                .HasForeignKey<ImageEmbedding>(e => e.ImageId);
 
         }
     }
