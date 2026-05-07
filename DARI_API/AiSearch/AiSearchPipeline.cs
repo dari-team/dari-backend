@@ -121,8 +121,8 @@ public class AiSearchPipeline
                 LatencyAiMs       = aiResult.LatencyMs,
                 LatencyDbMs       = dbSw.ElapsedMilliseconds,
                 RetryUsed         = aiResult.RetryUsed,
-                Notice            = BuildNotice(streetMatch, fallbackApplied,
-                                                plausibility.Cleaned.Location, aiResult.Language),
+                Notice            = BuildNotice(streetMatch, fallbackApplied, ranked.Count,
+                                                plausibility.Cleaned, aiResult.Language),
             },
         };
 
@@ -147,14 +147,41 @@ public class AiSearchPipeline
         return response;
     }
 
-    // Bilingual fallback notice for Problem 8 — never hide it silently.
+    // Bilingual notices for Problem 8 — never hide why a search returned what it did.
+    // Three cases, in priority order:
+    //   1. Zero results — explain which hard filters were applied (this is the
+    //      gap that left users staring at "No results" with no recourse).
+    //   2. Street fallback — the city-fallback message from the original spec.
+    //   3. Otherwise null (results match cleanly; no notice needed).
     private static string? BuildNotice(string streetMatch, bool fallbackApplied,
-                                       string? city, string lang)
+                                       int resultCount, ParsedQuery q, string lang)
     {
-        if (!fallbackApplied) return null;
-        var cityName = city ?? "this city";
-        return lang == "ar"
-            ? $"لم نجد نتائج في هذا الشارع — عرض كل نتائج {cityName}"
-            : $"No listings found on this street — showing all listings in {cityName}";
+        var isAr = lang == "ar";
+
+        if (resultCount == 0)
+        {
+            // Build a short list of the active hard filters so the user knows
+            // what to relax. Bedrooms is the most common culprit (exact match,
+            // per Problem 6); city + property type also gate hard.
+            var bits = new List<string>();
+            if (q.Bedrooms is int beds)         bits.Add(isAr ? $"{beds} غرف بالضبط" : $"exactly {beds} bedrooms");
+            if (!string.IsNullOrWhiteSpace(q.PropertyType)) bits.Add(q.PropertyType!);
+            if (!string.IsNullOrWhiteSpace(q.Location))     bits.Add(q.Location!);
+            if (q.PriceMax is decimal pmax)     bits.Add(isAr ? $"≤ {pmax:N0}" : $"≤ {pmax:N0}");
+            var summary = bits.Count > 0 ? string.Join(isAr ? "، " : ", ", bits) : (isAr ? "هذه الفلاتر" : "these filters");
+            return isAr
+                ? $"لم نجد عقارات تطابق ({summary}). جرب توسيع البحث (مثلاً تعديل عدد الغرف أو السعر)."
+                : $"No listings match ({summary}). Try widening your search — e.g. relax the bedroom count or price.";
+        }
+
+        if (fallbackApplied)
+        {
+            var cityName = q.Location ?? (isAr ? "هذه المدينة" : "this city");
+            return isAr
+                ? $"لم نجد نتائج في هذا الشارع — عرض كل نتائج {cityName}"
+                : $"No listings found on this street — showing all listings in {cityName}";
+        }
+
+        return null;
     }
 }
