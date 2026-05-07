@@ -101,10 +101,10 @@ namespace DARI_API
                         partitionKey: httpContext.Connection.RemoteIpAddress?.ToString() ?? "anon",
                         factory: _ => new TokenBucketRateLimiterOptions
                         {
-                            TokenLimit = 5,
+                            TokenLimit = 10,
                             QueueLimit = 0,
                             ReplenishmentPeriod = TimeSpan.FromMinutes(1),
-                            TokensPerPeriod = 5,
+                            TokensPerPeriod = 10,
                             AutoReplenishment = true,
                         }));
                 options.RejectionStatusCode = StatusCodes.Status429TooManyRequests;
