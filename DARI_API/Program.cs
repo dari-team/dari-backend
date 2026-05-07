@@ -5,7 +5,10 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.IdentityModel.Tokens;
 using System.Text;
+using System.Threading.RateLimiting;
+using Microsoft.AspNetCore.RateLimiting;
 using Microsoft.OpenApi.Models;
+using DARI_API.AiSearch;
 using DARI_API.ServicesLayer;
 using DARI_API.IServicesLayer;
 using DARI_API.Services;
@@ -79,6 +82,34 @@ namespace DARI_API
                 };
             });
 
+            // ── AI Search pipeline ────────────────────────────────────────
+            builder.Services.AddMemoryCache();
+            builder.Services.AddHttpClient(); // default factory used by GeminiExtractionService
+            builder.Services.AddSingleton<UserAiSearchQuota>();
+            builder.Services.AddSingleton<IAiSearchLogger, AiSearchLogger>();
+            builder.Services.AddSingleton<IAiExtractionService, GeminiExtractionService>();
+            builder.Services.AddScoped<SearchExecutor>();
+            builder.Services.AddScoped<AiSearchPipeline>();
+
+            // Per-IP token bucket for /api/AiSearch/search — paired with the
+            // per-user weekly quota inside the controller. Catches scripted abuse
+            // before the AI call is made.
+            builder.Services.AddRateLimiter(options =>
+            {
+                options.AddPolicy("ai-search", httpContext =>
+                    RateLimitPartition.GetTokenBucketLimiter(
+                        partitionKey: httpContext.Connection.RemoteIpAddress?.ToString() ?? "anon",
+                        factory: _ => new TokenBucketRateLimiterOptions
+                        {
+                            TokenLimit = 5,
+                            QueueLimit = 0,
+                            ReplenishmentPeriod = TimeSpan.FromMinutes(1),
+                            TokensPerPeriod = 5,
+                            AutoReplenishment = true,
+                        }));
+                options.RejectionStatusCode = StatusCodes.Status429TooManyRequests;
+            });
+
             builder.Services.AddControllers()
                 .AddJsonOptions(options =>
                 {
@@ -139,6 +170,7 @@ namespace DARI_API
             app.UseCors("DariDev");
             app.UseAuthentication();
             app.UseAuthorization();
+            app.UseRateLimiter();
 
             app.MapControllers();
 
