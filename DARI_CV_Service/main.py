@@ -6,7 +6,11 @@ import torch
 import numpy as np
 import io
 
-app = FastAPI(title="Dari CV Service", version="1.0.0")
+app = FastAPI(title="Dari CV Service", version="1.1.0")
+
+# CLIP model name — ViT-L/14 (768-d) gives meaningfully better Recall@1/5 than
+# ViT-B/32 (512-d) at the cost of ~3x inference and ~1.7GB model download.
+CLIP_MODEL_NAME = "openai/clip-vit-large-patch14"
 
 # Allow calls from your .NET backend
 app.add_middleware(
@@ -17,9 +21,9 @@ app.add_middleware(
 )
 
 # Load CLIP model once on startup (takes ~10s first time, cached after)
-print("Loading CLIP model...")
-model = CLIPModel.from_pretrained("openai/clip-vit-base-patch32")
-processor = CLIPProcessor.from_pretrained("openai/clip-vit-base-patch32")
+print(f"Loading CLIP model: {CLIP_MODEL_NAME} ...")
+model = CLIPModel.from_pretrained(CLIP_MODEL_NAME)
+processor = CLIPProcessor.from_pretrained(CLIP_MODEL_NAME)
 model.eval()
 print("CLIP model ready.")
 
@@ -38,7 +42,7 @@ def encode_image(image: Image.Image) -> list[float]:
 
 @app.get("/health")
 def health_check():
-    return {"status": "ok", "model": "clip-vit-base-patch32"}
+    return {"status": "ok", "model": CLIP_MODEL_NAME}
 
 
 @app.post("/encode")
