@@ -6,7 +6,7 @@ namespace DARI_API.IServicesLayer
     {
         Task SendEmailAsync(string to, string subject, string body);
         Task IndexImageAsync(Guid imageId, string imageUrl);
-        Task<List<VisualSearchResultViewModel>> SearchAsync(IFormFile queryImage, int topN = 10);
+        Task<List<VisualSearchResultViewModel>> SearchAsync(VisualSearchRequestViewModel request, int topN = 10);
     }
 
 }

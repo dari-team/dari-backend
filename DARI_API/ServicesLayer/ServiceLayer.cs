@@ -50,8 +50,11 @@ namespace DARI_API.ServicesLayer
             await _unitOfWork.SaveAsync();
         }
 
-        public async Task<List<VisualSearchResultViewModel>> SearchAsync(IFormFile queryImage, int topN = 10)
+        public async Task<List<VisualSearchResultViewModel>> SearchAsync(VisualSearchRequestViewModel request, int topN = 10)
         {
+            var queryImage = request.Image;
+
+            // ─── 1. Encode the query image via CV service ────────────────────────
             using var content = new MultipartFormDataContent();
             using var stream = queryImage.OpenReadStream();
             content.Add(new StreamContent(stream), "file", queryImage.FileName);
@@ -60,41 +63,119 @@ namespace DARI_API.ServicesLayer
             if (!response.IsSuccessStatusCode)
                 throw new Exception("CV service failed to encode the image.");
 
-            var result = await response.Content.ReadFromJsonAsync<EncodeResponse>();
-            if (result?.Embedding == null)
+            var encodeResult = await response.Content.ReadFromJsonAsync<EncodeResponse>();
+            if (encodeResult?.Embedding == null)
                 throw new Exception("CV service returned empty embedding.");
 
-            float[] queryVector = result.Embedding;
+            float[] queryVector = encodeResult.Embedding;
 
-            
-            var allEmbeddings = await _unitOfWork.ImageEmbeddings.GetAllAsync();
+            // ─── 2. Apply metadata pre-filter on listings (option #2) ────────────
+            var listings = (await _unitOfWork.Listings.GetAllAsync()).ToList();
 
-            
-            var scores = allEmbeddings
-                .Select(e => new
+            if (!string.IsNullOrWhiteSpace(request.PropertyType) &&
+                Enum.TryParse<Models.PropertyType>(request.PropertyType, true, out var pt))
+                listings = listings.Where(l => l.PropertyType == pt).ToList();
+
+            if (!string.IsNullOrWhiteSpace(request.ListingType))
+            {
+                // accept "buy"/"rent" as well as the enum names
+                var lt = request.ListingType.Equals("buy", StringComparison.OrdinalIgnoreCase) ? Models.ListingType.ForSale
+                       : request.ListingType.Equals("rent", StringComparison.OrdinalIgnoreCase) ? Models.ListingType.ForRent
+                       : (Enum.TryParse<Models.ListingType>(request.ListingType, true, out var parsed) ? parsed : (Models.ListingType?)null);
+                if (lt.HasValue) listings = listings.Where(l => l.ListingType == lt.Value).ToList();
+            }
+
+            if (!string.IsNullOrWhiteSpace(request.City))
+            {
+                var city = request.City.Trim();
+                listings = listings.Where(l => l.Address != null &&
+                    !string.IsNullOrEmpty(l.Address.City) &&
+                    l.Address.City.Equals(city, StringComparison.OrdinalIgnoreCase)).ToList();
+            }
+
+            if (request.BedsMin.HasValue) listings = listings.Where(l => l.Bedrooms >= request.BedsMin.Value).ToList();
+            if (request.BedsMax.HasValue) listings = listings.Where(l => l.Bedrooms <= request.BedsMax.Value).ToList();
+
+            if (listings.Count == 0) return new List<VisualSearchResultViewModel>();
+
+            var listingIds = listings.Select(l => l.Id).ToHashSet();
+
+            // ─── 3. Load embeddings + their images, restricted to filtered listings ─
+            var allImages = (await _unitOfWork.Images.GetAllAsync())
+                .Where(i => listingIds.Contains(i.ListingId))
+                .ToList();
+            var imageIdToListingId = allImages.ToDictionary(i => i.Id, i => i.ListingId);
+            var imageIdToUrl       = allImages.ToDictionary(i => i.Id, i => i.Url);
+
+            var allEmbeddings = (await _unitOfWork.ImageEmbeddings.GetAllAsync())
+                .Where(e => imageIdToListingId.ContainsKey(e.ImageId))
+                .ToList();
+
+            if (allEmbeddings.Count == 0) return new List<VisualSearchResultViewModel>();
+
+            // ─── 4. Pool embeddings per listing (option #1) ──────────────────────
+            // For each listing, compute the L2-normalized mean of its image
+            // embeddings. Also track the single best-matching image so we can
+            // show a representative thumbnail in the UI.
+            var perListing = new Dictionary<Guid, (float[] mean, Guid bestImageId, float bestImageScore)>();
+            foreach (var grp in allEmbeddings.GroupBy(e => imageIdToListingId[e.ImageId]))
+            {
+                float[]? sum = null;
+                int count = 0;
+                Guid bestId = Guid.Empty;
+                float bestScore = float.NegativeInfinity;
+
+                foreach (var e in grp)
                 {
-                    Embedding = e,
-                    Score = CosineSimilarity(queryVector, JsonSerializer.Deserialize<float[]>(e.EmbeddingJson)!)
+                    var vec = JsonSerializer.Deserialize<float[]>(e.EmbeddingJson);
+                    if (vec == null || vec.Length == 0) continue;
+                    // Defensive: when the CV backbone changes (e.g. ViT-B/32 →
+                    // ViT-L/14), old embeddings have a different dimension.
+                    // Silently skip those rather than crashing; they should be
+                    // re-indexed via /api/VisualSearch/reindex.
+                    if (vec.Length != queryVector.Length) continue;
+
+                    sum ??= new float[vec.Length];
+                    for (int i = 0; i < vec.Length; i++) sum[i] += vec[i];
+                    count++;
+
+                    var imgScore = CosineSimilarity(queryVector, vec);
+                    if (imgScore > bestScore) { bestScore = imgScore; bestId = e.ImageId; }
+                }
+                if (sum == null || count == 0) continue;
+
+                // mean + L2 normalize
+                float norm = 0;
+                for (int i = 0; i < sum.Length; i++) { sum[i] /= count; norm += sum[i] * sum[i]; }
+                norm = MathF.Sqrt(norm);
+                if (norm > 1e-9) for (int i = 0; i < sum.Length; i++) sum[i] /= norm;
+
+                perListing[grp.Key] = (sum, bestId, bestScore);
+            }
+
+            // ─── 5. Score listings (not images) by cosine against pooled vector ──
+            var ranked = perListing
+                .Select(kv => new
+                {
+                    ListingId = kv.Key,
+                    Score = CosineSimilarity(queryVector, kv.Value.mean),
+                    BestImageId = kv.Value.bestImageId,
                 })
                 .OrderByDescending(x => x.Score)
                 .Take(topN)
                 .ToList();
 
-            
             var results = new List<VisualSearchResultViewModel>();
-            foreach (var item in scores)
+            foreach (var item in ranked)
             {
-                var image = (await _unitOfWork.Images.FindAsync(i => i.Id == item.Embedding.ImageId)).FirstOrDefault();
-                if (image == null) continue;
-
-                var listing = (await _unitOfWork.Listings.FindAsync(l => l.Id == image.ListingId)).FirstOrDefault();
+                var listing = listings.FirstOrDefault(l => l.Id == item.ListingId);
                 if (listing == null) continue;
 
                 results.Add(new VisualSearchResultViewModel
                 {
                     ListingId = listing.Id,
                     Title = listing.Title,
-                    ImageUrl = image.Url,
+                    ImageUrl = imageIdToUrl.GetValueOrDefault(item.BestImageId, listing.CoverImageUrl ?? ""),
                     SimilarityScore = Math.Round(item.Score * 100, 1)
                 });
             }
