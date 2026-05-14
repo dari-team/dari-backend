@@ -17,6 +17,9 @@ namespace DARI_API.ViewModels
         public string? Finishing { get; set; }
         public ListingType ListingType { get; set; }
         public ListingKind? ListingKind { get; set; }
+        public PaymentMethod PaymentMethod { get; set; }
+        public CompletionStatus? CompletionStatus { get; set; }
+        public int ReferenceNumber { get; set; }
         public ListingStatus Status { get; set; }
         public bool IsApproved { get; set; }
         public bool IsFeatured { get; set; }
@@ -52,6 +55,9 @@ namespace DARI_API.ViewModels
             Finishing = l.Finishing,
             ListingType = l.ListingType,
             ListingKind = l.ListingKind,
+            PaymentMethod = l.PaymentMethod,
+            CompletionStatus = l.CompletionStatus,
+            ReferenceNumber = l.ReferenceNumber,
             Status = l.Status,
             IsApproved = l.IsApproved,
             IsFeatured = l.IsFeatured,

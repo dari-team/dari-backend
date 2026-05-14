@@ -36,6 +36,13 @@ namespace DARI_API.ViewModels
         // If omitted, backend infers from PropertyType.
         public ListingKind? ListingKind { get; set; }
 
+        // Required — Cash=0, Installments=1, Both=2.
+        [Required]
+        public PaymentMethod PaymentMethod { get; set; }
+
+        // Optional — Ready=0, OffPlan=1.
+        public CompletionStatus? CompletionStatus { get; set; }
+
         [Required]
         public CreateAddressRequest Address { get; set; } = new();
 

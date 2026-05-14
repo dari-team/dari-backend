@@ -1,8 +1,10 @@
 using DARI_API.Models;
+using DARI_API.ViewModels;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
+using System.Security.Claims;
 
 namespace DARI_API.Controllers
 {
@@ -699,6 +701,70 @@ namespace DARI_API.Controllers
         }
 
         // ============================================================
+        // Complaints (user reports on listings)
+        // ============================================================
+
+        private async Task<object> ProjectComplaint(Complaint c)
+        {
+            var listing  = await _db.Listings.FirstOrDefaultAsync(l => l.Id == c.ListingId);
+            var reporter = await _userManager.FindByIdAsync(c.ReporterId.ToString());
+            return new
+            {
+                c.Id,
+                c.Reason,
+                c.Details,
+                c.Status,
+                c.CreatedAt,
+                c.ReviewedAt,
+                c.ListingId,
+                ListingTitle = listing?.Title,
+                ListingReferenceNumber = listing?.ReferenceNumber,
+                Reporter = reporter == null ? null : new { reporter.Id, reporter.Name, reporter.Email }
+            };
+        }
+
+        // GET /api/admin/complaints?status=open
+        [HttpGet("complaints")]
+        public async Task<IActionResult> GetAllComplaints([FromQuery] string? status = null)
+        {
+            var q = _db.Complaints.AsQueryable();
+            if (!string.IsNullOrWhiteSpace(status) && Enum.TryParse<ComplaintStatus>(status, true, out var st))
+                q = q.Where(c => c.Status == st);
+
+            var complaints = await q.OrderByDescending(c => c.CreatedAt).ToListAsync();
+            var result = new List<object>();
+            foreach (var c in complaints)
+                result.Add(await ProjectComplaint(c));
+
+            return Ok(new { message = "Complaints retrieved.", data = result });
+        }
+
+        // GET /api/admin/complaints/{id}
+        [HttpGet("complaints/{id}")]
+        public async Task<IActionResult> GetComplaintById(Guid id)
+        {
+            var c = await _db.Complaints.FirstOrDefaultAsync(x => x.Id == id);
+            if (c == null) return NotFound(new { message = "Complaint not found." });
+            return Ok(new { message = "Complaint retrieved.", data = await ProjectComplaint(c) });
+        }
+
+        // PUT /api/admin/complaints/{id}/resolve
+        [HttpPut("complaints/{id}/resolve")]
+        public async Task<IActionResult> ResolveComplaint(Guid id, [FromBody] ResolveComplaintRequest dto)
+        {
+            var c = await _db.Complaints.FirstOrDefaultAsync(x => x.Id == id);
+            if (c == null) return NotFound(new { message = "Complaint not found." });
+
+            c.Status = dto.Status;
+            c.ReviewedAt = DateTime.UtcNow;
+            if (Guid.TryParse(User.FindFirstValue(ClaimTypes.NameIdentifier), out var adminId))
+                c.ReviewedBy = adminId;
+
+            await _db.SaveChangesAsync();
+            return Ok(new { message = "Complaint updated.", data = await ProjectComplaint(c) });
+        }
+
+        // ============================================================
         // Stats
         // ============================================================
 
@@ -720,11 +786,15 @@ namespace DARI_API.Controllers
             var totalInquiries  = await _db.Inquiries.CountAsync();
             var openInquiries   = await _db.Inquiries.CountAsync(i => i.Status != InquiryStatus.Closed);
 
+            var totalComplaints = await _db.Complaints.CountAsync();
+            var openComplaints  = await _db.Complaints.CountAsync(c => c.Status == ComplaintStatus.Open);
+
             return Ok(new
             {
                 users = new { totalUsers, suspendedUsers, bannedUsers, verifiedListers },
                 listings = new { totalListings, pendingListings, activeListings, rejectedListings, totalViews },
-                inquiries = new { totalInquiries, openInquiries }
+                inquiries = new { totalInquiries, openInquiries },
+                complaints = new { totalComplaints, openComplaints }
             });
         }
     }

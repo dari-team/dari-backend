@@ -87,6 +87,8 @@ namespace DARI_API.Controllers
                 Finishing = req.Finishing,
                 ListingType = req.ListingType,
                 ListingKind = req.ListingKind ?? InferListingKind(req.PropertyType),
+                PaymentMethod = req.PaymentMethod,
+                CompletionStatus = req.CompletionStatus,
                 Status = ListingStatus.Pending,
                 ViewCount = 0,
                 IsApproved = false,
@@ -206,6 +208,8 @@ namespace DARI_API.Controllers
             existing.Finishing = req.Finishing;
             existing.ListingType = req.ListingType;
             existing.ListingKind = req.ListingKind ?? InferListingKind(req.PropertyType);
+            existing.PaymentMethod = req.PaymentMethod;
+            existing.CompletionStatus = req.CompletionStatus;
             existing.Amenities = SerializeAmenities(req.Amenities);
             existing.UpdatedAt = DateTime.UtcNow;
 
@@ -275,7 +279,9 @@ namespace DARI_API.Controllers
             string? finishing,
             string? city,
             string? region,
-            string? amenities)
+            string? amenities,
+            PaymentMethod? paymentMethod,
+            CompletionStatus? completionStatus)
         {
             var q = ListingsWithRelations().Where(x => x.IsApproved);
 
@@ -291,6 +297,13 @@ namespace DARI_API.Controllers
             if (!string.IsNullOrWhiteSpace(finishing)) q = q.Where(x => x.Finishing == finishing);
             if (!string.IsNullOrWhiteSpace(city)) q = q.Where(x => x.Address != null && x.Address.City == city);
             if (!string.IsNullOrWhiteSpace(region)) q = q.Where(x => x.Address != null && x.Address.Region == region);
+            if (completionStatus != null) q = q.Where(x => x.CompletionStatus == completionStatus);
+
+            // paymentMethod: a listing marked "Both" satisfies a Cash or Installments filter.
+            if (paymentMethod == PaymentMethod.Cash)
+                q = q.Where(x => x.PaymentMethod == PaymentMethod.Cash || x.PaymentMethod == PaymentMethod.Both);
+            else if (paymentMethod == PaymentMethod.Installments)
+                q = q.Where(x => x.PaymentMethod == PaymentMethod.Installments || x.PaymentMethod == PaymentMethod.Both);
 
             // amenities = comma-separated keys; a listing must have ALL of them.
             // Amenities is a JSON array string, so we match the quoted key ("elevator")

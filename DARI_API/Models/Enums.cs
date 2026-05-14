@@ -49,6 +49,38 @@
         Commercial  = 1
     }
 
+    public enum PaymentMethod
+    {
+        Cash         = 0,
+        Installments = 1,
+        Both         = 2
+    }
+
+    public enum CompletionStatus
+    {
+        Ready   = 0,
+        OffPlan = 1
+    }
+
+    public enum ComplaintReason
+    {
+        Spam                 = 0,
+        ScamOrFraud          = 1,
+        IncorrectInfo        = 2,
+        AlreadySoldOrRented  = 3,
+        OffensiveContent     = 4,
+        Duplicate            = 5,
+        Other                = 6
+    }
+
+    public enum ComplaintStatus
+    {
+        Open        = 0,
+        Reviewed    = 1,
+        Dismissed   = 2,
+        ActionTaken = 3
+    }
+
     public enum ListingStatus
     {
         Draft,

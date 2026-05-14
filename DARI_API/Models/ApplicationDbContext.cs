@@ -29,6 +29,7 @@ namespace DARI_API.Models
         public DbSet<Notification> Notifications { get; set; }
         public DbSet<ListingView> ListingViews { get; set; }
         public DbSet<ImageEmbedding> ImageEmbeddings { get; set; }
+        public DbSet<Complaint> Complaints { get; set; }
         // ==========================
         // Model Configuration
         // ==========================
@@ -164,6 +165,27 @@ namespace DARI_API.Models
                 .WithOne(i => i.ImageEmbedding)
                 .HasForeignKey<ImageEmbedding>(e => e.ImageId);
 
+            builder.Entity<Complaint>()
+                .HasOne(c => c.Listing)
+                .WithMany(l => l.Complaints)
+                .HasForeignKey(c => c.ListingId)
+                .OnDelete(DeleteBehavior.Cascade);
+
+            builder.Entity<Complaint>()
+                .HasOne(c => c.Reporter)
+                .WithMany()
+                .HasForeignKey(c => c.ReporterId)
+                .OnDelete(DeleteBehavior.Restrict);
+
+            // Human-friendly listing reference numbers come from a SQL sequence
+            // starting at 100000000, so the first listing reads like "100000000".
+            builder.HasSequence<int>("ListingReferenceSeq").StartsAt(100000000).IncrementsBy(1);
+            builder.Entity<Listing>()
+                .Property(l => l.ReferenceNumber)
+                .HasDefaultValueSql("NEXT VALUE FOR ListingReferenceSeq");
+            builder.Entity<Listing>()
+                .HasIndex(l => l.ReferenceNumber)
+                .IsUnique();
         }
     }
 }

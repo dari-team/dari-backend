@@ -103,6 +103,19 @@ namespace DARI_API.Models
         [Column(TypeName = "nvarchar(MAX)")]
         public string? Amenities { get; set; }
 
+        // How the buyer can pay. Required on new listings; existing rows are
+        // backfilled with Cash by the migration.
+        [Required]
+        public PaymentMethod PaymentMethod { get; set; }
+
+        // Ready-to-move vs off-plan. Nullable — optional on the listing form.
+        public CompletionStatus? CompletionStatus { get; set; }
+
+        // Human-friendly sequential listing reference (e.g. 100000042), shown to
+        // users instead of the GUID. Generated from a SQL sequence on insert.
+        public int ReferenceNumber { get; set; }
+
         public ICollection<ListingView>? Views { get; set; }
+        public ICollection<Complaint>? Complaints { get; set; }
     }
 }
