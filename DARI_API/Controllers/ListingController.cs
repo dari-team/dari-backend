@@ -2,6 +2,7 @@ using DARI_API.Models;
 using DARI_API.ViewModels;
 using Microsoft.AspNetCore.Mvc;
 using System.Security.Claims;
+using System.Text.Json;
 using DARI_API.IServicesLayer;
 using DARI_API.Services;
 using Microsoft.AspNetCore.Authorization;
@@ -95,7 +96,8 @@ namespace DARI_API.Controllers
                 LifestyleScore = req.LifestyleScore,
                 LifestyleScoreBreakdown = req.LifestyleScoreBreakdown,
                 LifestyleScoreCalculatedAt = req.LifestyleScore.HasValue ? now : null,
-                CoverImageUrl = req.Images.OrderBy(i => i.SortOrder).FirstOrDefault()?.Url
+                CoverImageUrl = req.Images.OrderBy(i => i.SortOrder).FirstOrDefault()?.Url,
+                Amenities = SerializeAmenities(req.Amenities)
             };
 
             await _unitOfWork.Listings.AddAsync(listing);
@@ -204,6 +206,7 @@ namespace DARI_API.Controllers
             existing.Finishing = req.Finishing;
             existing.ListingType = req.ListingType;
             existing.ListingKind = req.ListingKind ?? InferListingKind(req.PropertyType);
+            existing.Amenities = SerializeAmenities(req.Amenities);
             existing.UpdatedAt = DateTime.UtcNow;
 
             if (majorEdit && !isAdmin)
@@ -271,7 +274,8 @@ namespace DARI_API.Controllers
             ListingKind? listingKind,
             string? finishing,
             string? city,
-            string? region)
+            string? region,
+            string? amenities)
         {
             var q = ListingsWithRelations().Where(x => x.IsApproved);
 
@@ -288,8 +292,28 @@ namespace DARI_API.Controllers
             if (!string.IsNullOrWhiteSpace(city)) q = q.Where(x => x.Address != null && x.Address.City == city);
             if (!string.IsNullOrWhiteSpace(region)) q = q.Where(x => x.Address != null && x.Address.Region == region);
 
+            // amenities = comma-separated keys; a listing must have ALL of them.
+            // Amenities is a JSON array string, so we match the quoted key ("elevator")
+            // to avoid one key being a substring of another.
+            if (!string.IsNullOrWhiteSpace(amenities))
+            {
+                foreach (var key in amenities.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries))
+                {
+                    var needle = $"\"{key}\"";
+                    q = q.Where(x => x.Amenities != null && x.Amenities.Contains(needle));
+                }
+            }
+
             var listings = await q.ToListAsync();
             return Ok(listings.Select(ListingResponse.From));
+        }
+
+        // Serialize amenity keys to a JSON array string for storage on Listing.
+        // Null/empty collapses to null so the column stays clean.
+        private static string? SerializeAmenities(List<string>? keys)
+        {
+            if (keys == null || keys.Count == 0) return null;
+            return JsonSerializer.Serialize(keys);
         }
 
         [HttpGet("recommended")]

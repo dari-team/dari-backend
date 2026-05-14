@@ -1,3 +1,4 @@
+using System.Text.Json;
 using DARI_API.Models;
 
 namespace DARI_API.ViewModels
@@ -31,6 +32,9 @@ namespace DARI_API.ViewModels
         public DateTime CreatedAt { get; set; }
         public DateTime UpdatedAt { get; set; }
 
+        // Amenity keys, parsed from the JSON array stored on Listing.Amenities.
+        public List<string> Amenities { get; set; } = new();
+
         public AddressResponse? Address { get; set; }
         public List<ImageResponse> Images { get; set; } = new();
 
@@ -62,6 +66,7 @@ namespace DARI_API.ViewModels
             AiQualityScore = l.AiQualityScore,
             CreatedAt = l.CreatedAt,
             UpdatedAt = l.UpdatedAt,
+            Amenities = ParseAmenities(l.Amenities),
             Address = l.Address == null ? null : new AddressResponse
             {
                 Street = l.Address.Street,
@@ -81,6 +86,20 @@ namespace DARI_API.ViewModels
                 SortOrder = i.SortOrder
             }).ToList() ?? new List<ImageResponse>()
         };
+
+        // Stored as a JSON array string. Malformed/empty payloads collapse to [].
+        private static List<string> ParseAmenities(string? json)
+        {
+            if (string.IsNullOrWhiteSpace(json)) return new List<string>();
+            try
+            {
+                return JsonSerializer.Deserialize<List<string>>(json) ?? new List<string>();
+            }
+            catch (JsonException)
+            {
+                return new List<string>();
+            }
+        }
     }
 
     public class AddressResponse

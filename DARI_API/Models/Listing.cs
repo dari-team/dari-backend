@@ -96,6 +96,13 @@ namespace DARI_API.Models
 
         [Column(TypeName = "nvarchar(255)")]
         public string? AiGeneratedTags { get; set; }
+
+        // Amenities the lister selected, stored as a JSON array of stable string
+        // keys (e.g. ["elevator","balcony"]). Nullable so pre-existing rows stay
+        // valid after the migration. Canonical key list lives in the frontend.
+        [Column(TypeName = "nvarchar(MAX)")]
+        public string? Amenities { get; set; }
+
         public ICollection<ListingView>? Views { get; set; }
     }
 }

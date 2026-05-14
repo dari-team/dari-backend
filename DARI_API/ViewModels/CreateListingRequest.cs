@@ -46,6 +46,10 @@ namespace DARI_API.ViewModels
         // Lifestyle score computed on client. Server stores as-is, never recomputes.
         public decimal? LifestyleScore { get; set; }
         public string? LifestyleScoreBreakdown { get; set; } // JSON string
+
+        // Amenity keys selected by the lister (e.g. ["elevator","balcony"]).
+        // Optional — listers may submit a listing with none.
+        public List<string> Amenities { get; set; } = new();
     }
 
     public class CreateAddressRequest
