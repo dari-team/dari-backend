@@ -34,6 +34,14 @@ namespace DARI_API.Models
 
         public DateTime? SubscriptionEndDate { get; set; }
 
+        // When set in the future, the account is suspended until that timestamp.
+        // Null means "not suspended". Banned accounts use AccountStatus.Banned instead
+        // (banned = forever; suspended = time-bounded).
+        public DateTime? SuspendedUntil { get; set; }
+
+        public string? SuspensionReason { get; set; }
+        public string? BanReason { get; set; }
+
         public string? EmailVerificationCode { get; set; }
 
         public DateTime? EmailVerificationExpiry { get; set; }

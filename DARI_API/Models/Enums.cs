@@ -4,7 +4,8 @@
     {
         Pending,
         Active,
-        Suspended
+        Suspended,
+        Banned
     }
 
     public enum UserType
