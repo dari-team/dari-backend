@@ -1,4 +1,5 @@
 using DARI_API.Models;
+using DARI_API.Services;
 using DARI_API.ViewModels;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Identity;
@@ -17,17 +18,20 @@ namespace DARI_API.Controllers
         private readonly ApplicationDbContext _db;
         private readonly UserManager<ApplicationUser> _userManager;
         private readonly RoleManager<IdentityRole<Guid>> _roleManager;
+        private readonly ICloudinaryService _cloudinary;
 
         public AdminController(
             IUnitOfWork unitOfWork,
             ApplicationDbContext db,
             UserManager<ApplicationUser> userManager,
-            RoleManager<IdentityRole<Guid>> roleManager)
+            RoleManager<IdentityRole<Guid>> roleManager,
+            ICloudinaryService cloudinary)
         {
             _unitOfWork = unitOfWork;
             _db = db;
             _userManager = userManager;
             _roleManager = roleManager;
+            _cloudinary = cloudinary;
         }
 
         // ============================================================
@@ -527,7 +531,17 @@ namespace DARI_API.Controllers
             if (addr != null) _db.Addresses.Remove(addr);
 
             _db.ListingViews.RemoveRange(_db.ListingViews.Where(v => v.ListingId == id));
-            _db.Images.RemoveRange(_db.Images.Where(i => i.ListingId == id));
+
+            // Delete the Cloudinary assets before dropping the image rows, so
+            // storage doesn't fill up with images of deleted listings.
+            var images = await _db.Images.Where(i => i.ListingId == id).ToListAsync();
+            foreach (var img in images)
+            {
+                if (string.IsNullOrWhiteSpace(img.PublicId)) continue;
+                try { await _cloudinary.DeleteAsync(img.PublicId); }
+                catch { /* best-effort — don't block the delete */ }
+            }
+            _db.Images.RemoveRange(images);
 
             // Inquiries on this listing
             var inquiries = await _db.Inquiries.Where(i => i.ListingId == id).ToListAsync();

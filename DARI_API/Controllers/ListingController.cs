@@ -229,7 +229,9 @@ namespace DARI_API.Controllers
         [HttpDelete("{id}")]
         public async Task<IActionResult> Delete(Guid id)
         {
-            var listing = await _unitOfWork.Listings.GetByIdAsync(id);
+            var listing = await _db.Listings
+                .Include(l => l.Images)
+                .FirstOrDefaultAsync(l => l.Id == id);
             if (listing == null)
                 return NotFound();
 
@@ -238,8 +240,34 @@ namespace DARI_API.Controllers
             if (!isAdmin && (!Guid.TryParse(userIdStr, out var userId) || userId != listing.ListerId))
                 return Forbid();
 
-            _unitOfWork.Listings.Delete(listing);
-            await _unitOfWork.SaveAsync();
+            // Delete the Cloudinary assets so storage doesn't fill up with dead
+            // images. Best-effort — a Cloudinary hiccup must not block the delete.
+            foreach (var img in listing.Images ?? new List<Image>())
+            {
+                if (string.IsNullOrWhiteSpace(img.PublicId)) continue;
+                try { await _cloudinary.DeleteAsync(img.PublicId); }
+                catch { /* best-effort */ }
+            }
+
+            // Image -> Listing FK is Restrict, so image rows must be removed first.
+            _db.Images.RemoveRange(listing.Images ?? Enumerable.Empty<Image>());
+
+            var address = await _db.Addresses.FirstOrDefaultAsync(a => a.ListingId == id);
+            if (address != null) _db.Addresses.Remove(address);
+
+            _db.ListingViews.RemoveRange(_db.ListingViews.Where(v => v.ListingId == id));
+
+            // Inquiry -> Listing FK is Restrict — clear inquiries + their messages.
+            var inquiries = await _db.Inquiries.Where(i => i.ListingId == id).ToListAsync();
+            foreach (var inq in inquiries)
+            {
+                _db.Messages.RemoveRange(_db.Messages.Where(m => m.InquiryId == inq.Id));
+                _db.Inquiries.Remove(inq);
+            }
+
+            // Complaints cascade-delete with the listing (FK configured Cascade).
+            _db.Listings.Remove(listing);
+            await _db.SaveChangesAsync();
             return Ok("Listing Deleted");
         }
 
