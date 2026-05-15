@@ -176,11 +176,10 @@ namespace DARI_API
                 await SeedSuperAdmin.SeedAsync(services);
             }
 
-            if (app.Environment.IsDevelopment())
-            {
-                app.UseSwagger();
-                app.UseSwaggerUI();
-            }
+            // Swagger enabled in all environments while the project is in
+            // early access. Gate behind IsDevelopment() once the API is public.
+            app.UseSwagger();
+            app.UseSwaggerUI();
 
             app.UseHttpsRedirection();
             app.UseStaticFiles();
