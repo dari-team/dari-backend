@@ -76,6 +76,8 @@ namespace DARI_API.ViewModels
             Address = l.Address == null ? null : new AddressResponse
             {
                 Street = l.Address.Street,
+                StreetAr = l.Address.StreetAr,
+                StreetLatin = l.Address.StreetLatin,
                 City = l.Address.City,
                 Region = l.Address.Region,
                 Country = l.Address.Country,
@@ -110,7 +112,13 @@ namespace DARI_API.ViewModels
 
     public class AddressResponse
     {
+        // Original user-typed form — used as a fallback when the localized
+        // pair below is missing (e.g. legacy rows from before bilingual storage).
         public string Street { get; set; } = "";
+        // Bilingual canonical forms. Frontend picks streetAr when the UI is in
+        // Arabic, streetLatin otherwise, falling back to Street if both are null.
+        public string? StreetAr { get; set; }
+        public string? StreetLatin { get; set; }
         public string City { get; set; } = "";
         public string Region { get; set; } = "";
         public string Country { get; set; } = "";

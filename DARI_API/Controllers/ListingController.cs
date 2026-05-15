@@ -1,3 +1,4 @@
+using DARI_API.AiSearch;
 using DARI_API.Models;
 using DARI_API.ViewModels;
 using Microsoft.AspNetCore.Mvc;
@@ -18,17 +19,20 @@ namespace DARI_API.Controllers
         private readonly ICloudinaryService _cloudinary;
         private readonly ApplicationDbContext _db;
         private readonly IServiceLayer _visualSearchService;
+        private readonly IStreetTransliterationService _streetTransliteration;
 
         public ListingController(
             IUnitOfWork unitOfWork,
             ICloudinaryService cloudinary,
             ApplicationDbContext db,
-            IServiceLayer visualSearchService)
+            IServiceLayer visualSearchService,
+            IStreetTransliterationService streetTransliteration)
         {
             _unitOfWork = unitOfWork;
             _cloudinary = cloudinary;
             _db = db;
             _visualSearchService = visualSearchService;
+            _streetTransliteration = streetTransliteration;
         }
 
         private Guid GetUserId()
@@ -104,6 +108,13 @@ namespace DARI_API.Controllers
 
             await _unitOfWork.Listings.AddAsync(listing);
 
+            // Bilingual canonical street pair via Gemini. The lister types in
+            // one script; we fill the other so the UI can render whichever the
+            // viewer's language calls for. On any Gemini failure we degrade
+            // gracefully — listing creation must never block on a flaky API.
+            var translit = await _streetTransliteration.TransliterateAsync(req.Address.Street);
+            var (streetAr, streetLatin, normVersion) = BuildBilingualStreet(req.Address.Street, translit);
+
             var address = new Address
             {
                 Id = Guid.NewGuid(),
@@ -113,7 +124,12 @@ namespace DARI_API.Controllers
                 Region = req.Address.Region,
                 Country = req.Address.Country,
                 Latitude = req.Address.Latitude,
-                Longitude = req.Address.Longitude
+                Longitude = req.Address.Longitude,
+                StreetAr = streetAr,
+                StreetLatin = streetLatin,
+                StreetSearchKey = StreetNormalizer.Normalize(
+                    string.Join(' ', new[] { streetAr, streetLatin }.Where(s => !string.IsNullOrWhiteSpace(s)))),
+                NormalizationVersion = normVersion,
             };
             await _unitOfWork.Addresses.AddAsync(address);
 
@@ -355,6 +371,27 @@ namespace DARI_API.Controllers
         {
             if (keys == null || keys.Count == 0) return null;
             return JsonSerializer.Serialize(keys);
+        }
+
+        // Decides what to store for the Arabic + Latin canonical street pair
+        // based on the user's typed input and Gemini's response. Three cases:
+        //  1. Gemini succeeded → store both forms it returned, stamp ai-v1.
+        //  2. Gemini failed but the typed form is detectably Arabic → store
+        //     it as StreetAr, leave StreetLatin null, stamp fallback-typed.
+        //  3. Gemini failed and typed form is non-Arabic → store as StreetLatin.
+        // The null side will be filled by a future re-key admin job; for now
+        // the user-facing UI falls back to the typed Street column when the
+        // language-specific form is missing.
+        private static (string? Ar, string? Latin, string Version) BuildBilingualStreet(
+            string typed, StreetTransliteration result)
+        {
+            if (result.Ok)
+                return (result.Ar, result.Latin, "ai-v1");
+
+            var hasArabic = typed.Any(c => c >= 0x0600 && c <= 0x06FF);
+            return hasArabic
+                ? ((string?)typed, (string?)null, "fallback-typed")
+                : ((string?)null, (string?)typed, "fallback-typed");
         }
 
         [HttpGet("recommended")]

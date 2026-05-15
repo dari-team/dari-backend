@@ -35,5 +35,29 @@ namespace DARI_API.Models
 
         [Column(TypeName = "decimal(11,8)")]
         public decimal Longitude { get; set; }
+
+        // Bilingual canonical forms produced by Gemini at INSERT time. The lister
+        // types in either script; Gemini fills in the missing one. The UI picks
+        // whichever matches the current language so an Arabic user never sees
+        // "Abbas El Akkad" on one card and "عباس العقاد" on the next.
+        [MaxLength(255)]
+        [Column(TypeName = "nvarchar(255)")]
+        public string? StreetAr { get; set; }
+
+        [MaxLength(255)]
+        [Column(TypeName = "nvarchar(255)")]
+        public string? StreetLatin { get; set; }
+
+        // Concatenation of both forms, lowercased + stop-word-stripped, fed to
+        // the SQL Server full-text catalog so cross-script search hits both.
+        // Stamped with NormalizationVersion so a future re-key job can find
+        // stale rows after the algorithm changes.
+        [MaxLength(255)]
+        [Column(TypeName = "nvarchar(255)")]
+        public string? StreetSearchKey { get; set; }
+
+        [MaxLength(32)]
+        [Column(TypeName = "nvarchar(32)")]
+        public string? NormalizationVersion { get; set; }
     }
 }

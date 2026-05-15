@@ -88,6 +88,7 @@ namespace DARI_API
             builder.Services.AddSingleton<UserAiSearchQuota>();
             builder.Services.AddSingleton<IAiSearchLogger, AiSearchLogger>();
             builder.Services.AddSingleton<IAiExtractionService, GeminiExtractionService>();
+            builder.Services.AddSingleton<IStreetTransliterationService, GeminiStreetTransliterationService>();
             builder.Services.AddScoped<SearchExecutor>();
             builder.Services.AddScoped<AiSearchPipeline>();
 
