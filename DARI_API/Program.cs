@@ -52,8 +52,16 @@ namespace DARI_API
             builder.Services.AddCors(options =>
             {
                 options.AddPolicy("DariDev", policy =>
-                    policy.WithOrigins(allowedOrigins)
-                          .SetIsOriginAllowedToAllowWildcardSubdomains()
+                    policy.SetIsOriginAllowed(origin =>
+                          {
+                              if (allowedOrigins.Contains(origin)) return true;
+                              // Accept any *.vercel.app deployment (preview + prod aliases).
+                              if (Uri.TryCreate(origin, UriKind.Absolute, out var uri)
+                                  && uri.Scheme == "https"
+                                  && (uri.Host == "vercel.app" || uri.Host.EndsWith(".vercel.app")))
+                                  return true;
+                              return false;
+                          })
                           .AllowAnyHeader()
                           .AllowAnyMethod()
                           .AllowCredentials());
