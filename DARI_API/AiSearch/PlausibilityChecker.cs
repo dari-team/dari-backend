@@ -15,10 +15,29 @@ public static class PlausibilityChecker
     private const int MaxBathrooms    = 10;
     private static readonly HashSet<string> ValidProperty = new(StringComparer.OrdinalIgnoreCase)
         { "apartment", "villa", "studio", "duplex", "penthouse" };
+    // Lowercase keys matching Listing.Finishing storage (frontend FILTERS_OPTIONS).
     private static readonly HashSet<string> ValidFinishing = new(StringComparer.OrdinalIgnoreCase)
-        { "CoreAndShell", "SemiFinished", "FullyFinished", "Unfurnished", "Furnished" };
+        { "fully_finished", "semi_finished", "core_shell", "furnished", "unfurnished" };
     private static readonly HashSet<string> ValidPayment = new(StringComparer.OrdinalIgnoreCase)
         { "Cash", "Installment", "Both" };
+    private static readonly HashSet<string> ValidCompletion = new(StringComparer.OrdinalIgnoreCase)
+        { "Ready", "OffPlan" };
+    // Canonical amenity keys — single source of truth for the AI-extracted set.
+    // MUST stay in sync with src/data/amenities.ts on the frontend; both sides
+    // persist these exact strings (Listing.Amenities is a JSON array of them).
+    private static readonly HashSet<string> ValidAmenities = new(StringComparer.Ordinal)
+    {
+        "elevator", "covered_parking", "natural_gas", "security",
+        "backup_generator", "utility_meters", "central_ac",
+        "built_in_wardrobes", "maids_room", "balcony", "private_roof",
+        "storage_room", "intercom", "internet", "within_compound",
+        "shared_pool", "shared_gym", "kids_play_area",
+        "landscaped_gardens", "private_garden", "private_pool",
+        "private_jacuzzi", "water_view", "landmark_view", "pets_allowed",
+    };
+    // Cap on AMENITIES_UNKNOWN change-log entries per request — a hostile or
+    // confused query could otherwise spam Layer 7 with one row per garbage key.
+    private const int MaxAmenityChangesLogged = 5;
 
     public static PlausibilityResult Check(ParsedQuery input)
     {
@@ -159,6 +178,51 @@ public static class PlausibilityChecker
                 OriginalValue = q.PaymentMethod, NewValue = null });
             q.PaymentMethod = null;
         }
+        if (!string.IsNullOrEmpty(q.CompletionStatus) && !ValidCompletion.Contains(q.CompletionStatus))
+        {
+            changes.Add(new PlausibilityChange { Field = nameof(q.CompletionStatus),
+                ReasonCode = PlausibilityReasons.CompletionUnknown,
+                OriginalValue = q.CompletionStatus, NewValue = null });
+            q.CompletionStatus = null;
+        }
+
+        // Amenities — filter to the canonical-key whitelist. AI is otherwise
+        // free to invent keys; if we passed them through, SearchExecutor's
+        // JSON-contains query would silently match nothing. Dedupe too, since
+        // the model occasionally repeats keys when the user mentions a synonym
+        // twice ("بسين ... swimming pool").
+        if (q.Amenities is { Count: > 0 } amen)
+        {
+            var seen   = new HashSet<string>(StringComparer.Ordinal);
+            var kept   = new List<string>(amen.Count);
+            var logged = 0;
+            foreach (var key in amen)
+            {
+                if (string.IsNullOrWhiteSpace(key)) continue;
+                if (ValidAmenities.Contains(key))
+                {
+                    if (seen.Add(key)) kept.Add(key);
+                    continue;
+                }
+                if (logged < MaxAmenityChangesLogged)
+                {
+                    changes.Add(new PlausibilityChange
+                    {
+                        Field         = nameof(q.Amenities),
+                        ReasonCode    = PlausibilityReasons.AmenitiesUnknown,
+                        OriginalValue = key,
+                        NewValue      = null,
+                    });
+                    logged++;
+                }
+            }
+            q.Amenities = kept.Count == 0 ? null : kept;
+        }
+        else if (q.Amenities is { Count: 0 })
+        {
+            // Schema requires the field; null is the canonical "user didn't say".
+            q.Amenities = null;
+        }
 
         return new PlausibilityResult { Cleaned = q, Changes = changes };
     }
@@ -179,5 +243,7 @@ public static class PlausibilityChecker
         FinishingLevel    = src.FinishingLevel,
         PaymentMethod     = src.PaymentMethod,
         MaxDownPayment    = src.MaxDownPayment,
+        CompletionStatus  = src.CompletionStatus,
+        Amenities         = src.Amenities is null ? null : new List<string>(src.Amenities),
     };
 }

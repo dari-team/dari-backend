@@ -109,6 +109,7 @@ public class AiSearchPipeline
                 StreetMatch       = streetMatch,
                 FallbackApplied   = fallbackApplied,
                 ResultCount       = ranked.Count,
+                TotalCandidates   = ranked.Count,
                 TierBreakdown     = new TierBreakdown
                 {
                     Exact   = ranked.Count(c => c.Match == MatchQuality.Exact),

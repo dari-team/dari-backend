@@ -84,6 +84,56 @@ public class SearchExecutor
 
         // Explicit bedrooms = hard filter. suggested_bedrooms is NOT.
         if (q.Bedrooms is int beds) listings = listings.Where(l => l.Bedrooms == beds);
+        // Bathrooms uses ">= N" (same as the regular Filter endpoint) — exact
+        // match here would too aggressively shrink results on a small dataset
+        // where a 3-bath listing should still answer "I want 2 bathrooms".
+        if (q.Bathrooms is int baths) listings = listings.Where(l => l.Bathrooms >= baths);
+
+        // Price / area — apply both bounds when present.
+        if (q.PriceMin is decimal pmin) listings = listings.Where(l => l.Price >= pmin);
+        if (q.PriceMax is decimal pmax) listings = listings.Where(l => l.Price <= pmax);
+        if (q.AreaMin  is decimal amin) listings = listings.Where(l => l.AreaSize >= amin);
+
+        // Finishing — Listing.Finishing stores the same lowercase key
+        // (fully_finished / semi_finished / core_shell / furnished / unfurnished)
+        // that the prompt now emits. Plausibility already dropped invalid values.
+        if (!string.IsNullOrWhiteSpace(q.FinishingLevel))
+        {
+            var f = q.FinishingLevel;
+            listings = listings.Where(l => l.Finishing == f);
+        }
+
+        // Completion status — nullable on Listing; only filter when the user said.
+        if (!string.IsNullOrWhiteSpace(q.CompletionStatus)
+            && Enum.TryParse<CompletionStatus>(q.CompletionStatus, ignoreCase: true, out var cs))
+        {
+            listings = listings.Where(l => l.CompletionStatus == cs);
+        }
+
+        // Payment method — "Both" listings satisfy a Cash or Installments filter
+        // (a seller who accepts both still accepts each one). Mirrors the rule
+        // ListingController.Filter uses on the regular filter endpoint.
+        if (!string.IsNullOrWhiteSpace(q.PaymentMethod))
+        {
+            if (q.PaymentMethod.Equals("Cash", StringComparison.OrdinalIgnoreCase))
+                listings = listings.Where(l => l.PaymentMethod == PaymentMethod.Cash || l.PaymentMethod == PaymentMethod.Both);
+            else if (q.PaymentMethod.Equals("Installment", StringComparison.OrdinalIgnoreCase))
+                listings = listings.Where(l => l.PaymentMethod == PaymentMethod.Installments || l.PaymentMethod == PaymentMethod.Both);
+            // "Both" → user said they're flexible; don't filter at all.
+        }
+
+        // Amenities — Listing.Amenities is a JSON array string (e.g. ["elevator","balcony"]).
+        // Match the quoted key so "pool" doesn't accidentally hit "shared_pool".
+        // Listing must have ALL requested amenities (AND semantics), same as the
+        // regular filter endpoint.
+        if (q.Amenities is { Count: > 0 } wanted)
+        {
+            foreach (var key in wanted)
+            {
+                var needle = "\"" + key + "\"";
+                listings = listings.Where(l => l.Amenities != null && l.Amenities.Contains(needle));
+            }
+        }
 
         if (hasCity)
         {

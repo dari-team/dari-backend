@@ -1,3 +1,5 @@
+using System.Collections.Generic;
+using System.Linq;
 using DARI_API.AiSearch;
 using Xunit;
 
@@ -174,10 +176,117 @@ public class PlausibilityCheckerTests
     public void Valid_finishing_level_passes_through()
     {
         var q = Empty();
+        q.FinishingLevel = "fully_finished";
+        var r = PlausibilityChecker.Check(q);
+
+        Assert.Equal("fully_finished", r.Cleaned.FinishingLevel);
+    }
+
+    // Catches accidental return to PascalCase: those values were what v1 emitted
+    // but never matched Listing.Finishing (lowercase keys), so SearchExecutor
+    // silently filtered to zero. Lock the new contract in a test.
+    [Fact]
+    public void PascalCase_finishing_level_is_rejected()
+    {
+        var q = Empty();
         q.FinishingLevel = "FullyFinished";
         var r = PlausibilityChecker.Check(q);
 
-        Assert.Equal("FullyFinished", r.Cleaned.FinishingLevel);
+        Assert.Null(r.Cleaned.FinishingLevel);
+        Assert.Contains(r.Changes, c => c.ReasonCode == PlausibilityReasons.FinishingUnknown);
+    }
+
+    // ── COMPLETION_UNKNOWN ─────────────────────────────────────────────────
+
+    [Fact]
+    public void Valid_completion_status_passes_through()
+    {
+        var q = Empty();
+        q.CompletionStatus = "Ready";
+        var r = PlausibilityChecker.Check(q);
+
+        Assert.Equal("Ready", r.Cleaned.CompletionStatus);
+        Assert.DoesNotContain(r.Changes, c => c.ReasonCode == PlausibilityReasons.CompletionUnknown);
+    }
+
+    [Fact]
+    public void Unknown_completion_status_is_dropped()
+    {
+        var q = Empty();
+        q.CompletionStatus = "PartiallyBuilt";
+        var r = PlausibilityChecker.Check(q);
+
+        Assert.Null(r.Cleaned.CompletionStatus);
+        Assert.Contains(r.Changes, c => c.ReasonCode == PlausibilityReasons.CompletionUnknown);
+    }
+
+    // ── AMENITIES_UNKNOWN ──────────────────────────────────────────────────
+
+    [Fact]
+    public void Amenities_filters_unknown_keys_and_keeps_valid_ones()
+    {
+        var q = Empty();
+        q.Amenities = new List<string> { "elevator", "fairy_ring", "balcony" };
+        var r = PlausibilityChecker.Check(q);
+
+        Assert.NotNull(r.Cleaned.Amenities);
+        Assert.Equal(new[] { "elevator", "balcony" }, r.Cleaned.Amenities!);
+        Assert.Contains(r.Changes, c =>
+            c.ReasonCode == PlausibilityReasons.AmenitiesUnknown &&
+            c.OriginalValue == "fairy_ring");
+    }
+
+    [Fact]
+    public void Amenities_deduplicates_repeated_keys()
+    {
+        var q = Empty();
+        q.Amenities = new List<string> { "shared_pool", "shared_pool", "shared_gym" };
+        var r = PlausibilityChecker.Check(q);
+
+        Assert.Equal(new[] { "shared_pool", "shared_gym" }, r.Cleaned.Amenities!);
+    }
+
+    [Fact]
+    public void Amenities_all_unknown_collapses_to_null()
+    {
+        var q = Empty();
+        q.Amenities = new List<string> { "unicorn_stable", "moat" };
+        var r = PlausibilityChecker.Check(q);
+
+        Assert.Null(r.Cleaned.Amenities);
+    }
+
+    [Fact]
+    public void Amenities_empty_list_collapses_to_null()
+    {
+        var q = Empty();
+        q.Amenities = new List<string>();
+        var r = PlausibilityChecker.Check(q);
+
+        Assert.Null(r.Cleaned.Amenities);
+    }
+
+    // Bounded log volume: an attacker spamming 50 garbage keys should not
+    // produce 50 PlausibilityChange rows for Layer 7 to write.
+    [Fact]
+    public void Amenities_change_log_is_capped_to_five()
+    {
+        var q = Empty();
+        q.Amenities = Enumerable.Range(0, 20).Select(i => $"bogus_{i}").ToList();
+        var r = PlausibilityChecker.Check(q);
+
+        Assert.Null(r.Cleaned.Amenities);
+        Assert.Equal(5, r.Changes.Count(c => c.ReasonCode == PlausibilityReasons.AmenitiesUnknown));
+    }
+
+    [Fact]
+    public void Amenities_null_input_stays_null_and_logs_nothing()
+    {
+        var q = Empty();
+        var r = PlausibilityChecker.Check(q);
+
+        Assert.Null(r.Cleaned.Amenities);
+        Assert.DoesNotContain(r.Changes, c => c.ReasonCode == PlausibilityReasons.AmenitiesUnknown);
     }
 
     [Fact]

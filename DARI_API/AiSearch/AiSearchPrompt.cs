@@ -1,9 +1,8 @@
 namespace DARI_API.AiSearch;
 
-// System prompt for Layer 2. Tight on purpose — every example added costs
-// ~80 tokens × every request, and the free-tier provider quotas are TPM-bound.
-// We keep only the 4 examples that disambiguate the trickiest rules
-// (family size, dialect mixing, price units, location_text preservation).
+// System prompt for Layer 2. Every example added costs ~80 tokens × every
+// request; the AMENITIES block costs more (one synonym line per canonical key)
+// but it's the only way the model learns the dialect mapping deterministically.
 public static class AiSearchPrompt
 {
     public const string SystemPrompt = """
@@ -23,9 +22,11 @@ Schema (every field nullable):
   "bathrooms":number|null,
   "suggested_bedrooms":number|null,
   "area_min":number|null,
-  "finishing_level":"CoreAndShell"|"SemiFinished"|"FullyFinished"|"Unfurnished"|"Furnished"|null,
+  "finishing_level":"fully_finished"|"semi_finished"|"core_shell"|"furnished"|"unfurnished"|null,
   "payment_method":"Cash"|"Installment"|"Both"|null,
-  "max_down_payment":number|null
+  "max_down_payment":number|null,
+  "completion_status":"Ready"|"OffPlan"|null,
+  "amenities":["<canonical_key>", ...]|null
 }
 
 LOCATION — canonical English values ONLY (else null):
@@ -59,15 +60,51 @@ BEDROOMS — distinguish explicit count vs family size:
   bedrooms = null;  suggested_bedrooms = (1-2→1, 3-4→2, 5-6→3, 7+→4).
 - Both mentioned → keep bedrooms, suggested_bedrooms = null.
 
-FINISHING: هيكل/core+shell→CoreAndShell, نص تشطيب/semi→SemiFinished,
-تشطيب كامل/fully finished→FullyFinished, مفروش/furnished→Furnished,
-غير مفروش/فاضي/unfurnished→Unfurnished.
+FINISHING — emit the lowercase key (matches DB storage):
+  هيكل / على الطوب / كور آند شيل / core and shell                  → core_shell
+  نص تشطيب / نصف تشطيب / semi finished / semi-finished              → semi_finished
+  تشطيب كامل / سوبر لوكس / سوبر سوبر لوكس / fully finished          → fully_finished
+  مفروش / furnished                                                  → furnished
+  غير مفروش / فاضي / unfurnished                                    → unfurnished
 
 PAYMENT: كاش/cash→Cash, تقسيط/installment/أقساط/بتقسيط→Installment, كاش أو تقسيط→Both.
 "مقدم X" / "down payment X" → max_down_payment = X.
 RULE: if the query contains كاش, تقسيط, أقساط, cash, or installment → payment_method MUST be set.
 
+COMPLETION_STATUS:
+  جاهز / استلام فوري / جاهز للسكن / ready / move-in ready             → Ready
+  تحت الإنشاء / أوف بلان / under construction / off plan / off-plan   → OffPlan
+
 NEAR_METRO: قريب من المترو / جنب المترو / near metro → true. Else null.
+
+AMENITIES — emit an array of canonical keys when the user mentions any.
+Map Egyptian-Arabic and English synonyms to ONE of these 26 keys (else omit):
+  elevator           ← أسانسير / مصعد / lift / elevator
+  covered_parking    ← جراج / كراج / باركينج / parking / garage / covered parking
+  natural_gas        ← غاز طبيعي / غاز / natural gas
+  security           ← أمن / حراسة / 24/7 security / security
+  backup_generator   ← مولد / جنريتر / مولد كهرباء / generator / backup generator
+  utility_meters     ← عدادات / مياه وكهرباء / water electricity meters / utility meters
+  central_ac         ← تكييف مركزي / مكيف مركزي / central ac / central a/c
+  built_in_wardrobes ← دواليب حائط / دواليب مدمجة / built-in wardrobes
+  maids_room         ← غرفة خادمة / غرفة شغالة / maid room / maids room
+  balcony            ← بلكونة / بلكون / تراس / شرفة / balcony / terrace
+  private_roof       ← روف / روف خاص / سطح / private roof
+  storage_room       ← غرفة تخزين / مخزن / storage / storage room
+  intercom           ← إنتركم / intercom
+  internet           ← إنترنت / دش / wifi / satellite / internet
+  within_compound    ← كمبوند / داخل كمبوند / compound / within compound
+  shared_pool        ← حمام سباحة مشترك / بسين / pool / shared pool / swimming pool
+  shared_gym         ← جيم / صالة جيم / نادي رياضي / gym / shared gym
+  kids_play_area     ← منطقة ألعاب أطفال / playground / kids area / kids play area
+  landscaped_gardens ← حدائق / مساحات خضراء / gardens / landscaped gardens
+  private_garden     ← حديقة خاصة / جنينة / private garden
+  private_pool       ← حمام سباحة خاص / بسين خاص / private pool
+  private_jacuzzi    ← جاكوزي / جاكوزي خاص / jacuzzi / private jacuzzi
+  water_view         ← فيو بحر / إطلالة نيل / إطلالة بحر / sea view / nile view / water view
+  landmark_view      ← إطلالة مميزة / فيو مفتوح / landmark view
+  pets_allowed       ← مسموح حيوانات / يقبل حيوانات / pets allowed
+If user lists multiple amenities, include ALL keys they mention. If none mentioned → null (NOT empty array).
 
 Egyptian colloquial cues to KEEP (search intent, not metadata):
 عايز, بدوّر على, محتاج, نفسي في, أنا عايز.
@@ -76,20 +113,23 @@ Egyptian colloquial cues to KEEP (search intent, not metadata):
 EXAMPLES:
 
 Input: "عايز شقة 3 غرف في عباس العقاد تحت مليون"
-{"property_type":"apartment","listing_type":null,"location":null,"location_text":"عباس العقاد","near_metro":null,"price_min":null,"price_max":1000000,"bedrooms":3,"bathrooms":null,"suggested_bedrooms":null,"area_min":null,"finishing_level":null,"payment_method":null,"max_down_payment":null}
+{"property_type":"apartment","listing_type":null,"location":null,"location_text":"عباس العقاد","near_metro":null,"price_min":null,"price_max":1000000,"bedrooms":3,"bathrooms":null,"suggested_bedrooms":null,"area_min":null,"finishing_level":null,"payment_method":null,"max_down_payment":null,"completion_status":null,"amenities":null}
 
 Input: "بدوّر على شقة لعيلة من 5 في مدينة نصر بتقسيط"
-{"property_type":"apartment","listing_type":null,"location":"Nasr City","location_text":null,"near_metro":null,"price_min":null,"price_max":null,"bedrooms":null,"bathrooms":null,"suggested_bedrooms":3,"area_min":null,"finishing_level":null,"payment_method":"Installment","max_down_payment":null}
+{"property_type":"apartment","listing_type":null,"location":"Nasr City","location_text":null,"near_metro":null,"price_min":null,"price_max":null,"bedrooms":null,"bathrooms":null,"suggested_bedrooms":3,"area_min":null,"finishing_level":null,"payment_method":"Installment","max_down_payment":null,"completion_status":null,"amenities":null}
 
 Input: "Studio furnished in Zamalek near metro حوالي 25k/month"
-{"property_type":"studio","listing_type":"rent","location":"Zamalek","location_text":null,"near_metro":true,"price_min":21250,"price_max":28750,"bedrooms":null,"bathrooms":null,"suggested_bedrooms":null,"area_min":null,"finishing_level":"Furnished","payment_method":null,"max_down_payment":null}
+{"property_type":"studio","listing_type":"rent","location":"Zamalek","location_text":null,"near_metro":true,"price_min":21250,"price_max":28750,"bedrooms":null,"bathrooms":null,"suggested_bedrooms":null,"area_min":null,"finishing_level":"furnished","payment_method":null,"max_down_payment":null,"completion_status":null,"amenities":null}
 
-Input: "فيلا 4 غرف في الشيخ زايد كاش أو تقسيط مقدم 500 ألف"
-{"property_type":"villa","listing_type":null,"location":"Sheikh Zayed","location_text":null,"near_metro":null,"price_min":null,"price_max":null,"bedrooms":4,"bathrooms":null,"suggested_bedrooms":null,"area_min":null,"finishing_level":null,"payment_method":"Both","max_down_payment":500000}
+Input: "شقة في كمبوند بالتجمع الخامس فيها جيم وحمام سباحة وأسانسير تشطيب كامل جاهزة"
+{"property_type":"apartment","listing_type":null,"location":"New Cairo","location_text":null,"near_metro":null,"price_min":null,"price_max":null,"bedrooms":null,"bathrooms":null,"suggested_bedrooms":null,"area_min":null,"finishing_level":"fully_finished","payment_method":null,"max_down_payment":null,"completion_status":"Ready","amenities":["within_compound","shared_gym","shared_pool","elevator"]}
+
+Input: "فيلا 4 غرف في الشيخ زايد كاش أو تقسيط مقدم 500 ألف أوف بلان"
+{"property_type":"villa","listing_type":null,"location":"Sheikh Zayed","location_text":null,"near_metro":null,"price_min":null,"price_max":null,"bedrooms":4,"bathrooms":null,"suggested_bedrooms":null,"area_min":null,"finishing_level":null,"payment_method":"Both","max_down_payment":500000,"completion_status":"OffPlan","amenities":null}
 
 Return ONLY the JSON object.
 """;
 
-    public const int MaxCompletionTokens = 400;
+    public const int MaxCompletionTokens = 500;
     public const double Temperature = 0.0;
 }

@@ -246,9 +246,30 @@ public class GeminiExtractionService : IAiExtractionService
             bathrooms          = new { type = "integer", nullable = true },
             suggested_bedrooms = new { type = "integer", nullable = true },
             area_min           = new { type = "number",  nullable = true },
-            finishing_level    = new { type = "string", nullable = true, @enum = new[] { "CoreAndShell", "SemiFinished", "FullyFinished", "Unfurnished", "Furnished" } },
+            finishing_level    = new { type = "string", nullable = true, @enum = new[] { "fully_finished", "semi_finished", "core_shell", "furnished", "unfurnished" } },
             payment_method     = new { type = "string", nullable = true, @enum = new[] { "Cash", "Installment", "Both" } },
             max_down_payment   = new { type = "number",  nullable = true },
+            completion_status  = new { type = "string", nullable = true, @enum = new[] { "Ready", "OffPlan" } },
+            amenities          = new
+            {
+                type     = "array",
+                nullable = true,
+                items    = new
+                {
+                    type  = "string",
+                    @enum = new[]
+                    {
+                        "elevator", "covered_parking", "natural_gas", "security",
+                        "backup_generator", "utility_meters", "central_ac",
+                        "built_in_wardrobes", "maids_room", "balcony", "private_roof",
+                        "storage_room", "intercom", "internet", "within_compound",
+                        "shared_pool", "shared_gym", "kids_play_area",
+                        "landscaped_gardens", "private_garden", "private_pool",
+                        "private_jacuzzi", "water_view", "landmark_view",
+                        "pets_allowed",
+                    },
+                },
+            },
         },
         required = new[]
         {
@@ -256,6 +277,7 @@ public class GeminiExtractionService : IAiExtractionService
             "near_metro", "price_min", "price_max", "bedrooms", "bathrooms",
             "suggested_bedrooms", "area_min", "finishing_level",
             "payment_method", "max_down_payment",
+            "completion_status", "amenities",
         },
     };
 

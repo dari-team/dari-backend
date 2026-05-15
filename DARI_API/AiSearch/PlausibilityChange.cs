@@ -28,4 +28,6 @@ public static class PlausibilityReasons
     public const string PropertyUnknown    = "PROPERTY_UNKNOWN";
     public const string PriceNegative      = "PRICE_NEGATIVE";
     public const string BathroomsAbsurd    = "BATHROOMS_ABSURD";
+    public const string CompletionUnknown  = "COMPLETION_UNKNOWN";
+    public const string AmenitiesUnknown   = "AMENITIES_UNKNOWN";
 }

@@ -14,6 +14,10 @@ public class AiSearchMeta
     public required string StreetMatch                { get; set; }   // "exact" | "partial" | "none"
     public required bool   FallbackApplied            { get; set; }   // true when no street match
     public required int    ResultCount               { get; set; }
+    // Total candidate listings BEFORE the .Take(50) hydration slice — lets the
+    // frontend say "showing 50 of 312" once the new amenities + completion
+    // filters start gating hard. Equals ResultCount when ≤ 50.
+    public required int    TotalCandidates           { get; set; }
     public required TierBreakdown TierBreakdown      { get; set; }
     public required ParsedQuery ParsedFilters        { get; set; }   // shown to user; lets them edit
     public required List<PlausibilityChange> Corrections { get; set; } = new();

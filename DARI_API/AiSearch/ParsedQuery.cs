@@ -21,9 +21,11 @@ public class ParsedQuery
     public int?    Bathrooms           { get; set; }
     public int?    SuggestedBedrooms   { get; set; }   // family-size → soft signal only
     public decimal? AreaMin            { get; set; }
-    public string? FinishingLevel      { get; set; }   // CoreAndShell | SemiFinished | FullyFinished | Unfurnished | Furnished
+    public string? FinishingLevel      { get; set; }   // fully_finished | semi_finished | core_shell | furnished | unfurnished
     public string? PaymentMethod       { get; set; }   // Cash | Installment | Both
     public decimal? MaxDownPayment     { get; set; }
+    public string? CompletionStatus    { get; set; }   // Ready | OffPlan
+    public List<string>? Amenities     { get; set; }   // canonical keys from frontend AMENITIES list
 }
 
 // Wrapper carrying observability data alongside the parsed payload.
