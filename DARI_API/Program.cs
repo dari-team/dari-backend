@@ -40,6 +40,8 @@ namespace DARI_API
             {
                 "http://localhost:5173",
                 "http://127.0.0.1:5173",
+                "https://dari-frontend-lnzm.vercel.app",
+                "https://dari-frontend-lnzm-git-main-georges-projects-2b86278b.vercel.app",
                 "https://dari-frontend-lnzm-4ph7osbl6-georges-projects-2b86278b.vercel.app",
             };
             var configuredOrigins = builder.Configuration
