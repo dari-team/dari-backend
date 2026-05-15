@@ -33,11 +33,25 @@ namespace DARI_API
             builder.Services.Configure<CloudinaryOptions>(builder.Configuration.GetSection("Cloudinary"));
             builder.Services.AddSingleton<ICloudinaryService, CloudinaryService>();
 
-            // CORS for Vite dev server (port 5173). Lock this down before prod.
+            // Allowed origins: dev + Vercel production. Extra origins can be
+            // appended via the "Cors:AllowedOrigins" config array (e.g. Azure
+            // App Service → Configuration) without redeploying.
+            var defaultOrigins = new[]
+            {
+                "http://localhost:5173",
+                "http://127.0.0.1:5173",
+                "https://dari-frontend-lnzm-4ph7osbl6-georges-projects-2b86278b.vercel.app",
+            };
+            var configuredOrigins = builder.Configuration
+                .GetSection("Cors:AllowedOrigins")
+                .Get<string[]>() ?? Array.Empty<string>();
+            var allowedOrigins = defaultOrigins.Concat(configuredOrigins).Distinct().ToArray();
+
             builder.Services.AddCors(options =>
             {
                 options.AddPolicy("DariDev", policy =>
-                    policy.WithOrigins("http://localhost:5173", "http://127.0.0.1:5173")
+                    policy.WithOrigins(allowedOrigins)
+                          .SetIsOriginAllowedToAllowWildcardSubdomains()
                           .AllowAnyHeader()
                           .AllowAnyMethod()
                           .AllowCredentials());
