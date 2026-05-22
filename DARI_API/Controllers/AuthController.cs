@@ -28,11 +28,19 @@ public class AuthController : ControllerBase
         _serviceLayer = serviceLayer;
     }
 
+    // Roles a visitor may self-assign. Admin is intentionally excluded so it can
+    // never be obtained through a public, unauthenticated endpoint.
+    private static bool IsPubliclyRegisterable(UserType type)
+        => type == UserType.Customer || type == UserType.Lister;
+
     [HttpPost("register")]
     public async Task<IActionResult> Register(RegisterViewModel model)
     {
         if (!ModelState.IsValid)
             return BadRequest(ModelState);
+
+        if (!IsPubliclyRegisterable(model.UserType))
+            return BadRequest("Invalid account type.");
 
         var user = new ApplicationUser
         {
@@ -193,6 +201,9 @@ public class AuthController : ControllerBase
                 role = (await _userManager.GetRolesAsync(existing)).FirstOrDefault()
             });
         }
+
+        if (!IsPubliclyRegisterable(model.UserType))
+            return BadRequest("Invalid account type.");
 
         var user = new ApplicationUser
         {
