@@ -7,7 +7,7 @@ using System.Security.Claims;
 
 namespace DARI_API.Controllers
 {
-    [Authorize(Roles = "Customer")]
+    [Authorize] // any authenticated user — buyers, listers, and agents can keep wishlists
     [ApiController]
     [Route("api/[controller]")]
     public class WishlistController : Controller
