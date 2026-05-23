@@ -97,6 +97,17 @@ namespace DARI_API.Controllers
 
             var totalViews = views.Count;
 
+            // Unique visitors: dedup key is UserId when logged in, else VisitorHash.
+            // Rows with neither (legacy/pre-hash) each count as their own visitor.
+            var uniqueViews = views
+                .Select(v => v.UserId.HasValue
+                    ? $"u:{v.UserId}"
+                    : !string.IsNullOrEmpty(v.VisitorHash)
+                        ? $"h:{v.VisitorHash}"
+                        : $"r:{v.Id}")
+                .Distinct()
+                .Count();
+
             // Views per day over full listing lifetime
             var daysLive = Math.Max(1, (now - listing.CreatedAt).TotalDays);
             var viewsPerDay = Math.Round(totalViews / daysLive, 2);
@@ -140,6 +151,7 @@ namespace DARI_API.Controllers
                 listingId = id,
                 title = listing.Title,
                 totalViews,
+                uniqueViews,
                 viewsPerDay,
                 totalInquiries = inquiries.Count,
                 conversionRate,

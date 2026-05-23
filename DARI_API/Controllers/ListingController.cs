@@ -7,6 +7,7 @@ using System.Text.Json;
 using DARI_API.IServicesLayer;
 using DARI_API.Services;
 using Microsoft.AspNetCore.Authorization;
+using Microsoft.AspNetCore.RateLimiting;
 using Microsoft.EntityFrameworkCore;
 
 namespace DARI_API.Controllers
@@ -160,18 +161,49 @@ namespace DARI_API.Controllers
             return CreatedAtAction(nameof(GetById), new { id = listingId }, ListingResponse.From(listing));
         }
 
-        // GET /api/Listing/{id}?source=search|direct|saved|map
+        // GET /api/Listing/{id}
+        // Pure read — view tracking lives in POST /api/Listing/{id}/views so that
+        // crawlers, link-preview bots, and prefetch don't inflate the count.
         [HttpGet("{id}")]
-        public async Task<IActionResult> GetById(Guid id, [FromQuery] string? source = null)
+        public async Task<IActionResult> GetById(Guid id)
         {
             var listing = await ListingsWithRelations().FirstOrDefaultAsync(x => x.Id == id);
             if (listing == null)
                 return NotFound();
 
-            listing.ViewCount++;
+            return Ok(ListingResponse.From(listing));
+        }
+
+        // POST /api/Listing/{id}/views?source=search|direct|saved|map
+        // Records a view, deduped to one per visitor per listing per 24h. The
+        // listing owner's own visits are never counted. Anonymous visitors are
+        // identified by a salted hash of their IP + User-Agent (no raw IP stored).
+        [HttpPost("{id}/views")]
+        [EnableRateLimiting("listing-views")]
+        public async Task<IActionResult> RecordView(Guid id, [FromQuery] string? source = null)
+        {
+            var listing = await _db.Listings.FirstOrDefaultAsync(x => x.Id == id);
+            if (listing == null)
+                return NotFound();
 
             var userIdStr = User.FindFirstValue(ClaimTypes.NameIdentifier);
             Guid? userId = Guid.TryParse(userIdStr, out var uid) ? uid : (Guid?)null;
+
+            // Owner viewing their own listing never counts.
+            if (userId.HasValue && listing.ListerId == userId.Value)
+                return NoContent();
+
+            string? visitorHash = userId.HasValue ? null : ComputeVisitorHash();
+
+            var since = DateTime.UtcNow.AddHours(-24);
+            bool seenRecently = userId.HasValue
+                ? await _db.ListingViews.AnyAsync(v =>
+                    v.ListingId == id && v.UserId == userId.Value && v.ViewedAt >= since)
+                : visitorHash != null && await _db.ListingViews.AnyAsync(v =>
+                    v.ListingId == id && v.VisitorHash == visitorHash && v.ViewedAt >= since);
+
+            if (seenRecently)
+                return NoContent();
 
             var parsedSource = ViewSource.Direct;
             if (!string.IsNullOrWhiteSpace(source) &&
@@ -180,18 +212,30 @@ namespace DARI_API.Controllers
                 parsedSource = s;
             }
 
+            listing.ViewCount++;
             _db.ListingViews.Add(new ListingView
             {
                 Id = Guid.NewGuid(),
                 ListingId = listing.Id,
                 UserId = userId,
+                VisitorHash = visitorHash,
                 Source = parsedSource,
                 ViewedAt = DateTime.UtcNow
             });
 
             await _unitOfWork.SaveAsync();
+            return NoContent();
+        }
 
-            return Ok(ListingResponse.From(listing));
+        // Salted SHA-256 of client IP + User-Agent. Never stores the raw IP.
+        private string ComputeVisitorHash()
+        {
+            var ip = HttpContext.Connection.RemoteIpAddress?.ToString() ?? "unknown";
+            var ua = Request.Headers.UserAgent.ToString();
+            var salt = Environment.GetEnvironmentVariable("VIEW_HASH_SALT") ?? "dari-view-salt";
+            var bytes = System.Security.Cryptography.SHA256.HashData(
+                System.Text.Encoding.UTF8.GetBytes($"{salt}|{ip}|{ua}"));
+            return Convert.ToHexString(bytes).ToLowerInvariant();
         }
 
         [Authorize(Roles = "Lister,Admin")]

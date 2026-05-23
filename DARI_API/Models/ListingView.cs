@@ -20,6 +20,13 @@ namespace DARI_API.Models
         [ForeignKey("UserId")]
         public ApplicationUser? User { get; set; }
 
+        // Privacy-preserving fingerprint for anonymous visitors: SHA-256 of
+        // (salt + client IP + User-Agent). Lets us dedup repeat visits without
+        // storing a raw IP. Null for logged-in users (UserId is the dedup key).
+        [MaxLength(64)]
+        [Column(TypeName = "varchar(64)")]
+        public string? VisitorHash { get; set; }
+
         [Required]
         public ViewSource Source { get; set; }
 

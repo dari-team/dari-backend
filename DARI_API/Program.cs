@@ -8,6 +8,7 @@ using System.Text;
 using System.Threading.RateLimiting;
 using Microsoft.AspNetCore.RateLimiting;
 using Microsoft.OpenApi.Models;
+using Microsoft.AspNetCore.HttpOverrides;
 using DARI_API.AiSearch;
 using DARI_API.ServicesLayer;
 using DARI_API.IServicesLayer;
@@ -132,7 +133,32 @@ namespace DARI_API
                             TokensPerPeriod = 10,
                             AutoReplenishment = true,
                         }));
+
+                // Per-IP cap on listing view recording so a script can't hammer
+                // the DB even though most rows would be discarded by 24h dedup.
+                options.AddPolicy("listing-views", httpContext =>
+                    RateLimitPartition.GetTokenBucketLimiter(
+                        partitionKey: httpContext.Connection.RemoteIpAddress?.ToString() ?? "anon",
+                        factory: _ => new TokenBucketRateLimiterOptions
+                        {
+                            TokenLimit = 60,
+                            QueueLimit = 0,
+                            ReplenishmentPeriod = TimeSpan.FromMinutes(1),
+                            TokensPerPeriod = 60,
+                            AutoReplenishment = true,
+                        }));
                 options.RejectionStatusCode = StatusCodes.Status429TooManyRequests;
+            });
+
+            // Behind Azure App Service (and any reverse proxy) the real client IP
+            // arrives in X-Forwarded-For. Without this, RemoteIpAddress is the
+            // proxy's IP and every visitor would collapse to one VisitorHash.
+            builder.Services.Configure<ForwardedHeadersOptions>(options =>
+            {
+                options.ForwardedHeaders =
+                    ForwardedHeaders.XForwardedFor | ForwardedHeaders.XForwardedProto;
+                options.KnownNetworks.Clear();
+                options.KnownProxies.Clear();
             });
 
             builder.Services.AddControllers()
@@ -189,6 +215,7 @@ namespace DARI_API
             app.UseSwagger();
             app.UseSwaggerUI();
 
+            app.UseForwardedHeaders();
             app.UseHttpsRedirection();
             app.UseStaticFiles();
             app.UseCors("DariDev");

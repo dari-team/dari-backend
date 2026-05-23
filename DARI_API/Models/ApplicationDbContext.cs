@@ -160,6 +160,13 @@ namespace DARI_API.Models
                 .HasForeignKey(lv => lv.UserId)
                 .OnDelete(DeleteBehavior.Restrict);
 
+            // Back the 24h dedup lookups: "has this visitor viewed this listing recently?"
+            builder.Entity<ListingView>()
+                .HasIndex(lv => new { lv.ListingId, lv.VisitorHash, lv.ViewedAt });
+
+            builder.Entity<ListingView>()
+                .HasIndex(lv => new { lv.ListingId, lv.UserId, lv.ViewedAt });
+
             builder.Entity<ImageEmbedding>()
                 .HasOne(e => e.Image)
                 .WithOne(i => i.ImageEmbedding)
