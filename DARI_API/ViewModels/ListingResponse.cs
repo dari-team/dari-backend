@@ -41,6 +41,10 @@ namespace DARI_API.ViewModels
         public AddressResponse? Address { get; set; }
         public List<ImageResponse> Images { get; set; } = new();
 
+        // The real owner of the listing — surfaced so the public listing page can
+        // show who actually listed the property instead of a placeholder.
+        public ListerResponse? Lister { get; set; }
+
         public static ListingResponse From(Listing l) => new()
         {
             Id = l.Id,
@@ -92,7 +96,16 @@ namespace DARI_API.ViewModels
                 Width = i.Width,
                 Height = i.Height,
                 SortOrder = i.SortOrder
-            }).ToList() ?? new List<ImageResponse>()
+            }).ToList() ?? new List<ImageResponse>(),
+            Lister = l.Lister == null ? null : new ListerResponse
+            {
+                Id = l.Lister.Id,
+                Name = l.Lister.Name,
+                AgencyName = l.Lister.AgencyName,
+                PhoneNumber = l.Lister.PhoneNumber,
+                ListerType = l.Lister.ListerType,
+                IsVerified = l.Lister.IsVerified
+            }
         };
 
         // Stored as a JSON array string. Malformed/empty payloads collapse to [].
@@ -124,6 +137,16 @@ namespace DARI_API.ViewModels
         public string Country { get; set; } = "";
         public decimal Latitude { get; set; }
         public decimal Longitude { get; set; }
+    }
+
+    public class ListerResponse
+    {
+        public Guid Id { get; set; }
+        public string Name { get; set; } = "";
+        public string? AgencyName { get; set; }
+        public string? PhoneNumber { get; set; }
+        public ListerType? ListerType { get; set; }
+        public bool IsVerified { get; set; }
     }
 
     public class ImageResponse

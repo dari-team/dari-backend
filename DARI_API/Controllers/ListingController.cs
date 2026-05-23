@@ -40,9 +40,9 @@ namespace DARI_API.Controllers
             return Guid.Parse(User.FindFirst(ClaimTypes.NameIdentifier).Value);
         }
 
-        // Base query for reads: eager-load Address + Images so ListingResponse can map them.
+        // Base query for reads: eager-load Address + Images + Lister so ListingResponse can map them.
         private IQueryable<Listing> ListingsWithRelations() =>
-            _db.Listings.Include(l => l.Address).Include(l => l.Images);
+            _db.Listings.Include(l => l.Address).Include(l => l.Images).Include(l => l.Lister);
 
         [HttpGet]
         public async Task<IActionResult> GetAll()
