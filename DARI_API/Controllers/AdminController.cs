@@ -398,7 +398,7 @@ namespace DARI_API.Controllers
 
         // PUT /api/admin/listings/{id}/approve
         [HttpPut("listings/{id}/approve")]
-        public async Task<IActionResult> ApproveListing(Guid id)
+        public async Task<IActionResult> ApproveListing(Guid id, [FromBody] ApproveListingDto? dto = null)
         {
             var listing = await _unitOfWork.Listings.GetByIdAsync(id);
             if (listing == null) return NotFound(new { message = "Listing not found." });
@@ -408,6 +408,7 @@ namespace DARI_API.Controllers
 
             listing.IsApproved = true;
             listing.Status = ListingStatus.Active;
+            listing.IsFeatured = dto?.Feature ?? false;
             listing.RejectionReason = null;
             listing.UpdatedAt = DateTime.UtcNow;
 
@@ -824,6 +825,11 @@ namespace DARI_API.Controllers
     public class RejectListingDto
     {
         public string RejectionReason { get; set; } = "";
+    }
+
+    public class ApproveListingDto
+    {
+        public bool Feature { get; set; } = false;
     }
 
     public class BanUserDto
