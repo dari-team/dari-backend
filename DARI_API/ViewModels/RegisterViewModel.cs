@@ -15,6 +15,10 @@ namespace DARI_API.ViewModels
         [MinLength(6)]
         public string Password { get; set; }
 
+        [Required]
+        [Phone]
+        public string PhoneNumber { get; set; }
+
         // Optional depending on user type
         public UserType UserType { get; set; }
         

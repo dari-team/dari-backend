@@ -48,6 +48,7 @@ public class AuthController : ControllerBase
             Email = model.Email,
             UserName = model.Email,
             Name = model.Name,
+            PhoneNumber = model.PhoneNumber,
 
             AccountStatus = AccountStatus.Pending,
             UserType = model.UserType,
