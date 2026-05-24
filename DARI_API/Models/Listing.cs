@@ -27,6 +27,26 @@ namespace DARI_API.Models
         [Column(TypeName = "nvarchar(MAX)")]
         public string Description { get; set; }
 
+        // Bilingual versions of the lister's free-text fields, filled once at
+        // create time by Gemini (see GeminiListingTranslationService). The lister
+        // types in one language; we store both so the listing page can render
+        // whichever the viewer's UI calls for. All nullable — pre-existing rows
+        // and any row where translation failed stay valid, and the frontend
+        // falls back to the original Title/Description.
+        [MaxLength(255)]
+        [Column(TypeName = "nvarchar(255)")]
+        public string? TitleAr { get; set; }
+
+        [MaxLength(255)]
+        [Column(TypeName = "nvarchar(255)")]
+        public string? TitleEn { get; set; }
+
+        [Column(TypeName = "nvarchar(MAX)")]
+        public string? DescriptionAr { get; set; }
+
+        [Column(TypeName = "nvarchar(MAX)")]
+        public string? DescriptionEn { get; set; }
+
         [Column(TypeName = "nvarchar(MAX)")]
         public string? AiGeneratedDescription { get; set; }
 

@@ -21,19 +21,22 @@ namespace DARI_API.Controllers
         private readonly ApplicationDbContext _db;
         private readonly IServiceLayer _visualSearchService;
         private readonly IStreetTransliterationService _streetTransliteration;
+        private readonly IListingTranslationService _listingTranslation;
 
         public ListingController(
             IUnitOfWork unitOfWork,
             ICloudinaryService cloudinary,
             ApplicationDbContext db,
             IServiceLayer visualSearchService,
-            IStreetTransliterationService streetTransliteration)
+            IStreetTransliterationService streetTransliteration,
+            IListingTranslationService listingTranslation)
         {
             _unitOfWork = unitOfWork;
             _cloudinary = cloudinary;
             _db = db;
             _visualSearchService = visualSearchService;
             _streetTransliteration = streetTransliteration;
+            _listingTranslation = listingTranslation;
         }
 
         private Guid GetUserId()
@@ -106,6 +109,20 @@ namespace DARI_API.Controllers
                 CoverImageUrl = req.Images.OrderBy(i => i.SortOrder).FirstOrDefault()?.Url,
                 Amenities = SerializeAmenities(req.Amenities)
             };
+
+            // Bilingual title/description via Gemini. The lister writes in one
+            // language; we store both so the listing page can render whichever
+            // the viewer's UI calls for. On any Gemini failure we leave the
+            // columns null — listing creation must never block on a flaky API,
+            // and the frontend falls back to the original Title/Description.
+            var translation = await _listingTranslation.TranslateAsync(req.Title, req.Description);
+            if (translation.Ok)
+            {
+                listing.TitleAr = translation.TitleAr;
+                listing.TitleEn = translation.TitleEn;
+                listing.DescriptionAr = translation.DescriptionAr;
+                listing.DescriptionEn = translation.DescriptionEn;
+            }
 
             await _unitOfWork.Listings.AddAsync(listing);
 

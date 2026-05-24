@@ -9,6 +9,12 @@ namespace DARI_API.ViewModels
         public Guid ListerId { get; set; }
         public string Title { get; set; } = "";
         public string Description { get; set; } = "";
+        // Bilingual versions filled at create time. Null when translation failed
+        // or for legacy rows — frontend falls back to Title/Description.
+        public string? TitleAr { get; set; }
+        public string? TitleEn { get; set; }
+        public string? DescriptionAr { get; set; }
+        public string? DescriptionEn { get; set; }
         public decimal Price { get; set; }
         public int Bedrooms { get; set; }
         public int Bathrooms { get; set; }
@@ -51,6 +57,10 @@ namespace DARI_API.ViewModels
             ListerId = l.ListerId,
             Title = l.Title,
             Description = l.Description,
+            TitleAr = l.TitleAr,
+            TitleEn = l.TitleEn,
+            DescriptionAr = l.DescriptionAr,
+            DescriptionEn = l.DescriptionEn,
             Price = l.Price,
             Bedrooms = l.Bedrooms,
             Bathrooms = l.Bathrooms,
