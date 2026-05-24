@@ -28,6 +28,9 @@ namespace DARI_API.Models
         [Column(TypeName = "nvarchar(255)")]
         public string? AgencyName { get; set; }
 
+        [MaxLength(500)]
+        public string? ProfilePictureUrl { get; set; }
+
         public bool IsVerified { get; set; }
 
         public int MaxListings { get; set; }

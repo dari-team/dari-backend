@@ -321,6 +321,10 @@ public class AuthController : ControllerBase
         if (!string.IsNullOrEmpty(model.LicenseNumber))
             user.LicenseNumber = model.LicenseNumber;
 
+        // Allow setting and explicit clearing (empty string -> null).
+        if (model.ProfilePictureUrl != null)
+            user.ProfilePictureUrl = model.ProfilePictureUrl.Length == 0 ? null : model.ProfilePictureUrl;
+
         user.UpdatedAt = DateTime.UtcNow;
 
         var result = await _userManager.UpdateAsync(user);
@@ -352,7 +356,8 @@ public class AuthController : ControllerBase
             user.CustomerType,
             user.ListerType,
             user.AgencyName,
-            user.LicenseNumber
+            user.LicenseNumber,
+            user.ProfilePictureUrl
         });
     }
 

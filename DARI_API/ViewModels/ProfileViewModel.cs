@@ -16,6 +16,9 @@ public class ProfileViewModel
     
     public string? AgencyName { get; set; }
 
-   
+
     public string? LicenseNumber { get; set; }
+
+    [MaxLength(500)]
+    public string? ProfilePictureUrl { get; set; }
 }
