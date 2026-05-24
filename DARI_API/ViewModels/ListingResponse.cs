@@ -114,7 +114,8 @@ namespace DARI_API.ViewModels
                 AgencyName = l.Lister.AgencyName,
                 PhoneNumber = l.Lister.PhoneNumber,
                 ListerType = l.Lister.ListerType,
-                IsVerified = l.Lister.IsVerified
+                IsVerified = l.Lister.IsVerified,
+                ProfilePictureUrl = l.Lister.ProfilePictureUrl
             }
         };
 
@@ -157,6 +158,7 @@ namespace DARI_API.ViewModels
         public string? PhoneNumber { get; set; }
         public ListerType? ListerType { get; set; }
         public bool IsVerified { get; set; }
+        public string? ProfilePictureUrl { get; set; }
     }
 
     public class ImageResponse
