@@ -107,7 +107,9 @@ namespace DARI_API.Controllers
                 LifestyleScoreBreakdown = req.LifestyleScoreBreakdown,
                 LifestyleScoreCalculatedAt = req.LifestyleScore.HasValue ? now : null,
                 CoverImageUrl = req.Images.OrderBy(i => i.SortOrder).FirstOrDefault()?.Url,
-                Amenities = SerializeAmenities(req.Amenities)
+                Amenities = SerializeAmenities(req.Amenities),
+                AiGeneratedTags = SerializeTags(req.Tags),
+                AiGeneratedDescription = string.IsNullOrWhiteSpace(req.AiGeneratedDescription) ? null : req.AiGeneratedDescription
             };
 
             // Bilingual title/description via Gemini. The lister writes in one
@@ -288,6 +290,13 @@ namespace DARI_API.Controllers
             existing.PaymentMethod = req.PaymentMethod;
             existing.CompletionStatus = req.CompletionStatus;
             existing.Amenities = SerializeAmenities(req.Amenities);
+            // Only overwrite AI-generated fields when the edit actually supplies
+            // them — the edit form doesn't always rehydrate these, and a blank
+            // payload must not wipe previously stored tags/description.
+            if (req.Tags is { Count: > 0 })
+                existing.AiGeneratedTags = SerializeTags(req.Tags);
+            if (!string.IsNullOrWhiteSpace(req.AiGeneratedDescription))
+                existing.AiGeneratedDescription = req.AiGeneratedDescription;
             existing.UpdatedAt = DateTime.UtcNow;
 
             if (majorEdit && !isAdmin)
@@ -432,6 +441,15 @@ namespace DARI_API.Controllers
         {
             if (keys == null || keys.Count == 0) return null;
             return JsonSerializer.Serialize(keys);
+        }
+
+        // Tags are stored comma-joined to match the generate-and-apply endpoint.
+        private static string? SerializeTags(List<string>? tags)
+        {
+            if (tags == null || tags.Count == 0) return null;
+            var clean = tags.Select(t => t?.Trim()).Where(t => !string.IsNullOrEmpty(t));
+            var joined = string.Join(",", clean);
+            return string.IsNullOrEmpty(joined) ? null : joined;
         }
 
         // Decides what to store for the Arabic + Latin canonical street pair

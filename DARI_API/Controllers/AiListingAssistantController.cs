@@ -242,6 +242,10 @@ Reply ONLY with this exact JSON:
                 return null;
 
             bool isEnglish = string.Equals(model.Language, "en", StringComparison.OrdinalIgnoreCase);
+
+            var amenitiesEn = model.Amenities is { Count: > 0 } ? string.Join(", ", model.Amenities) : "none specified";
+            var amenitiesAr = model.Amenities is { Count: > 0 } ? string.Join("، ", model.Amenities) : "غير محددة";
+
             var prompt = isEnglish ? $@"
 You are a professional real estate copywriter. Write a compelling, unique property description in English.
 
@@ -255,10 +259,13 @@ Property details:
 - Area: {model.AreaSize} m²
 - Finishing: {model.Finishing ?? "not specified"}
 - Location: {model.Location ?? "not specified"}
+- Payment method: {model.PaymentMethod ?? "not specified"}
+- Completion status: {model.CompletionStatus ?? "not specified"}
+- Amenities: {amenitiesEn}
 
 Requirements:
-1. Write a professional, engaging English description (3-4 sentences). Make it unique and vivid.
-2. Suggest 5 relevant English keyword tags for this property.
+1. Write a professional, engaging English description (3-4 sentences). Make it unique and vivid. Naturally weave in the most appealing amenities and the payment/completion details when relevant — do not just list them.
+2. Suggest 5 relevant English keyword tags for this property, drawing on its location, type, and standout amenities.
 
 Reply ONLY with JSON in this exact format:
 {{
@@ -277,10 +284,13 @@ Reply ONLY with JSON in this exact format:
 - المساحة: {model.AreaSize} متر مربع
 - التشطيب: {model.Finishing ?? "غير محدد"}
 - الموقع: {model.Location ?? "غير محدد"}
+- طريقة الدفع: {model.PaymentMethod ?? "غير محددة"}
+- حالة التسليم: {model.CompletionStatus ?? "غير محددة"}
+- وسائل الراحة: {amenitiesAr}
 
 المطلوب:
-1. اكتب وصفاً احترافياً جذاباً ومميزاً للعقار باللغة العربية (3-4 جمل). اجعل كل وصف فريداً ومختلفاً.
-2. اقترح قائمة من 5 تاجات (كلمات مفتاحية) مناسبة للعقار باللغة العربية.
+1. اكتب وصفاً احترافياً جذاباً ومميزاً للعقار باللغة العربية (3-4 جمل). اجعل كل وصف فريداً ومختلفاً، وادمج أبرز وسائل الراحة وتفاصيل الدفع والتسليم بشكل طبيعي عند الحاجة دون مجرد سردها.
+2. اقترح قائمة من 5 تاجات (كلمات مفتاحية) مناسبة للعقار باللغة العربية، مستندة إلى الموقع والنوع وأبرز وسائل الراحة.
 
 أجب فقط بصيغة JSON بالشكل التالي بدون أي نص إضافي:
 {{

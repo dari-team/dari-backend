@@ -57,6 +57,13 @@ namespace DARI_API.ViewModels
         // Amenity keys selected by the lister (e.g. ["elevator","balcony"]).
         // Optional — listers may submit a listing with none.
         public List<string> Amenities { get; set; } = new();
+
+        // AI-generated keyword tags, stored comma-joined on Listing.AiGeneratedTags.
+        public List<string> Tags { get; set; } = new();
+
+        // The AI-generated description the lister applied, kept alongside the
+        // (possibly edited) Description for provenance.
+        public string? AiGeneratedDescription { get; set; }
     }
 
     public class CreateAddressRequest

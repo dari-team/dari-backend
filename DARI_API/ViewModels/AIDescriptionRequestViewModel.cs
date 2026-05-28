@@ -11,6 +11,10 @@
         public string ListingType { get; set; }
         public string? Finishing { get; set; }
         public string? Location { get; set; }
+        /// <summary>Human-readable amenity labels (already localized by the client).</summary>
+        public List<string>? Amenities { get; set; }
+        public string? PaymentMethod { get; set; }
+        public string? CompletionStatus { get; set; }
         /// <summary>"ar" (default) or "en"</summary>
         public string? Language { get; set; }
     }
