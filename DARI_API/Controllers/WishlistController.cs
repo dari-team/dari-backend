@@ -47,6 +47,9 @@ namespace DARI_API.Controllers
                     item.AddedAt,
                     item.AddedBy,
                     ListingTitle = listing?.Title ?? "",
+                    // Localized titles so the client can render in the viewer's language.
+                    ListingTitleEn = listing?.TitleEn,
+                    ListingTitleAr = listing?.TitleAr,
                     ListingPrice = listing?.Price ?? 0,
                     ListingCity  = address?.City  ?? "",
                     ListingType  = listing?.ListingType,
