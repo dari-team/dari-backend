@@ -74,6 +74,9 @@ namespace DARI_API.Controllers
             return new
             {
                 wishlist.Id,
+                // Lets the client distinguish the owner from collaborators so it can
+                // hide owner-only controls (rename, delete, sharing) for collaborators.
+                wishlist.OwnerId,
                 wishlist.Name,
                 wishlist.IsShared,
                 wishlist.CreatedAt,
