@@ -80,8 +80,8 @@ namespace DARI_API.Controllers
             await _unitOfWork.Notifications.AddAsync(notification);
         }
 
-        //CUSTOMER ONLY
-        [Authorize(Roles = "Customer")]
+        //CUSTOMER + LISTER (listers/agents may inquire on listings they don't own)
+        [Authorize(Roles = "Customer,Lister")]
         [HttpPost]
         public async Task<IActionResult> Create(InquiryViewModel model)
         {
@@ -144,8 +144,8 @@ namespace DARI_API.Controllers
             return Ok(inquiry);
         }
 
-        // CUSTOMER ONLY
-        [Authorize(Roles = "Customer")]
+        // CUSTOMER + LISTER (so a lister can see inquiries they sent)
+        [Authorize(Roles = "Customer,Lister")]
         [HttpGet("my")]
         public async Task<IActionResult> GetMyInquiries()
         {
