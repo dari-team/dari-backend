@@ -42,7 +42,10 @@ namespace DARI_API.Controllers
                 ListerName = lister?.Name ?? "",
                 ListerProfilePictureUrl = lister?.ProfilePictureUrl,
                 inquiry.ListingId,
-                ListingTitle  = listing?.Title ?? "",
+                ListingTitle    = listing?.Title ?? "",
+                // Localized titles so the client can render in the viewer's language.
+                ListingTitleEn  = listing?.TitleEn,
+                ListingTitleAr  = listing?.TitleAr,
                 ListingCity   = address?.City  ?? "",
                 ListingPrice  = listing?.Price ?? 0,
                 ListingType   = listing?.ListingType,
