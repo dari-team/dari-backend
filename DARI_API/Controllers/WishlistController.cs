@@ -50,6 +50,7 @@ namespace DARI_API.Controllers
                     // Localized titles so the client can render in the viewer's language.
                     ListingTitleEn = listing?.TitleEn,
                     ListingTitleAr = listing?.TitleAr,
+                    ListingImageUrl = listing?.CoverImageUrl,
                     ListingPrice = listing?.Price ?? 0,
                     ListingCity  = address?.City  ?? "",
                     ListingType  = listing?.ListingType,
