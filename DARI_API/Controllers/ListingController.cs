@@ -409,7 +409,10 @@ namespace DARI_API.Controllers
             if (listingType != null) q = q.Where(x => x.ListingType == listingType);
             if (listingKind != null) q = q.Where(x => x.ListingKind == listingKind);
             if (!string.IsNullOrWhiteSpace(finishing)) q = q.Where(x => x.Finishing == finishing);
-            if (!string.IsNullOrWhiteSpace(city)) q = q.Where(x => x.Address != null && x.Address.City == city);
+            // A location pick can be a governorate (stored in City) or a district
+            // (stored in Region). Match either so "Sheikh Zayed" finds listings whose
+            // City is "Giza" and Region is "Sheikh Zayed".
+            if (!string.IsNullOrWhiteSpace(city)) q = q.Where(x => x.Address != null && (x.Address.City == city || x.Address.Region == city));
             if (!string.IsNullOrWhiteSpace(region)) q = q.Where(x => x.Address != null && x.Address.Region == region);
             if (completionStatus != null) q = q.Where(x => x.CompletionStatus == completionStatus);
 
