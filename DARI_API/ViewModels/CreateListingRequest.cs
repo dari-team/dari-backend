@@ -54,6 +54,10 @@ namespace DARI_API.ViewModels
         public decimal? LifestyleScore { get; set; }
         public string? LifestyleScoreBreakdown { get; set; } // JSON string
 
+        // AI listing-quality score (0–10) computed on the client at submit time.
+        // Server stores as-is, never recomputes.
+        public decimal? AiQualityScore { get; set; }
+
         // Amenity keys selected by the lister (e.g. ["elevator","balcony"]).
         // Optional — listers may submit a listing with none.
         public List<string> Amenities { get; set; } = new();

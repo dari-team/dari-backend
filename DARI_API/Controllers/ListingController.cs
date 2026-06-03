@@ -106,6 +106,7 @@ namespace DARI_API.Controllers
                 LifestyleScore = req.LifestyleScore,
                 LifestyleScoreBreakdown = req.LifestyleScoreBreakdown,
                 LifestyleScoreCalculatedAt = req.LifestyleScore.HasValue ? now : null,
+                AiQualityScore = req.AiQualityScore,
                 CoverImageUrl = req.Images.OrderBy(i => i.SortOrder).FirstOrDefault()?.Url,
                 Amenities = SerializeAmenities(req.Amenities),
                 AiGeneratedTags = SerializeTags(req.Tags),
@@ -297,6 +298,10 @@ namespace DARI_API.Controllers
                 existing.AiGeneratedTags = SerializeTags(req.Tags);
             if (!string.IsNullOrWhiteSpace(req.AiGeneratedDescription))
                 existing.AiGeneratedDescription = req.AiGeneratedDescription;
+            // Persist a freshly computed quality score on edit, but don't wipe an
+            // existing one when the edit payload omits it.
+            if (req.AiQualityScore.HasValue)
+                existing.AiQualityScore = req.AiQualityScore;
             existing.UpdatedAt = DateTime.UtcNow;
 
             if (majorEdit && !isAdmin)
