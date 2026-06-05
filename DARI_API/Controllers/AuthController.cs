@@ -61,7 +61,7 @@ public class AuthController : ControllerBase
             IsVerified = false,
             EmailConfirmed = false, 
 
-            MaxListings = model.UserType == UserType.Lister ? 10 : 0,
+            MaxListings = model.UserType == UserType.Lister ? 30 : 0,
 
             CreatedAt = DateTime.UtcNow,
             UpdatedAt = DateTime.UtcNow
@@ -221,7 +221,7 @@ public class AuthController : ControllerBase
             AgencyName = model.AgencyName,
             LicenseNumber = model.LicenseNumber,
 
-            MaxListings = model.UserType == UserType.Lister ? 10 : 0,
+            MaxListings = model.UserType == UserType.Lister ? 30 : 0,
 
             CreatedAt = DateTime.UtcNow,
             UpdatedAt = DateTime.UtcNow,

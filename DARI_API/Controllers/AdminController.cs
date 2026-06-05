@@ -267,6 +267,30 @@ namespace DARI_API.Controllers
             return Ok(new { message = $"Role '{dto.Role}' assigned to user '{user.UserName}'." });
         }
 
+        // PATCH /api/admin/users/{id}/max-listings
+        // Set a lister/agent's listing cap. 0 = unlimited.
+        [HttpPatch("users/{id}/max-listings")]
+        public async Task<IActionResult> SetMaxListings(Guid id, [FromBody] SetMaxListingsDto dto)
+        {
+            if (dto == null || dto.MaxListings < 0)
+                return BadRequest(new { message = "MaxListings must be 0 or greater (0 = unlimited)." });
+
+            var user = await _userManager.FindByIdAsync(id.ToString());
+            if (user == null) return NotFound(new { message = "User not found." });
+
+            if (user.UserType != UserType.Lister)
+                return BadRequest(new { message = "Only listers/agents have a listing cap." });
+
+            user.MaxListings = dto.MaxListings;
+            user.UpdatedAt = DateTime.UtcNow;
+
+            var result = await _userManager.UpdateAsync(user);
+            if (!result.Succeeded)
+                return StatusCode(500, new { message = "Failed to update listing cap.", errors = result.Errors });
+
+            return Ok(new { message = "Listing cap updated.", maxListings = user.MaxListings });
+        }
+
         // DELETE /api/admin/users/{id}
         [HttpDelete("users/{id}")]
         public async Task<IActionResult> DeleteUser(Guid id)
@@ -846,6 +870,11 @@ namespace DARI_API.Controllers
     public class VerifyUserDto
     {
         public bool? IsVerified { get; set; }
+    }
+
+    public class SetMaxListingsDto
+    {
+        public int MaxListings { get; set; }
     }
 
     public class AdminNotificationDto
