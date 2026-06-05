@@ -147,13 +147,14 @@ SCORING CRITERIA:
 
 1. completeness (0-100): Are all key fields provided? Title (10), description ≥50 chars (20), price > 0 (10), bedrooms & bathrooms (10), area (10), finishing (10), city (10), photos ≥3 (10), photos ≥6 bonus (+10). Deduct for missing fields.
 
-2. descriptionQuality (0-100): Is description professional, detailed (>100 chars = +20, >200 = +20), no phone numbers (-30), no ALL CAPS spam (-20), mentions key features (+20), Arabic or English properly written (+20)?
+2. descriptionQuality (0-100): Start at 100 — a detailed, professional description earns full marks. Deduct: under 100 chars -40 (or 100-200 chars -20); contains a phone number -30; ALL CAPS spam -20; doesn't mention key features (rooms, location, finishing, amenities) -20; not properly written Arabic/English -20. A clean, detailed (>200 chars), feature-rich description scores 100.
 
 3. credibility (0-100): Does price seem reasonable for Egypt (not 0, not suspiciously low)? Is data consistent (e.g. studio shouldn't have 5 bedrooms)? No contradictions? Score 100 if all good, deduct for issues.
 
-4. photoScore (0-100): 0 photos=0, 1-2=30, 3-4=60, 5-7=80, 8+=100.
+4. photoScore (0-100): 0 photos=0, 1-2=40, 3-5=70, 6-7=90, 8+=100.
 
 Calculate overallScore = (completeness*0.3 + descriptionQuality*0.3 + credibility*0.2 + photoScore*0.2) rounded to integer.
+A complete, credible listing with a strong description and 8+ photos should score close to 100 — do NOT artificially cap excellent listings below 100.
 
 verdict: ""poor"" if overall<40, ""fair"" if 40-59, ""good"" if 60-79, ""excellent"" if >=80.
 
