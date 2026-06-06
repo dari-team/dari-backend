@@ -1,0 +1,9 @@
+# Note: torch / torchvision are installed separately in the Dockerfile from the
+# CPU-only wheel index, so they are intentionally NOT listed here.
+fastapi==0.115.6
+uvicorn[standard]==0.34.0
+transformers==4.46.3
+Pillow==10.4.0
+numpy==1.26.4
+python-multipart==0.0.20
+httpx==0.28.1

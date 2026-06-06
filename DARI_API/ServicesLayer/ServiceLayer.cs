@@ -113,15 +113,16 @@ namespace DARI_API.ServicesLayer
 
             if (allEmbeddings.Count == 0) return new List<VisualSearchResultViewModel>();
 
-            // ─── 4. Pool embeddings per listing (option #1) ──────────────────────
-            // For each listing, compute the L2-normalized mean of its image
-            // embeddings. Also track the single best-matching image so we can
-            // show a representative thumbnail in the UI.
-            var perListing = new Dictionary<Guid, (float[] mean, Guid bestImageId, float bestImageScore)>();
+            // ─── 4. Score each listing by its single best-matching image (max-pool) ─
+            // The query is ONE photo and the user wants listings that CONTAIN a
+            // similar photo, so we rank each listing by its closest image rather
+            // than the mean of all its photos. Mean-pooling diluted strong matches
+            // (an identical photo only scored ~75% against a 6-photo average);
+            // cross-category confusion is handled by the metadata pre-filter above,
+            // not by averaging. We also keep that best image id for the thumbnail.
+            var perListing = new Dictionary<Guid, (Guid bestImageId, float bestScore)>();
             foreach (var grp in allEmbeddings.GroupBy(e => imageIdToListingId[e.ImageId]))
             {
-                float[]? sum = null;
-                int count = 0;
                 Guid bestId = Guid.Empty;
                 float bestScore = float.NegativeInfinity;
 
@@ -135,30 +136,20 @@ namespace DARI_API.ServicesLayer
                     // re-indexed via /api/VisualSearch/reindex.
                     if (vec.Length != queryVector.Length) continue;
 
-                    sum ??= new float[vec.Length];
-                    for (int i = 0; i < vec.Length; i++) sum[i] += vec[i];
-                    count++;
-
                     var imgScore = CosineSimilarity(queryVector, vec);
                     if (imgScore > bestScore) { bestScore = imgScore; bestId = e.ImageId; }
                 }
-                if (sum == null || count == 0) continue;
+                if (bestId == Guid.Empty) continue;
 
-                // mean + L2 normalize
-                float norm = 0;
-                for (int i = 0; i < sum.Length; i++) { sum[i] /= count; norm += sum[i] * sum[i]; }
-                norm = MathF.Sqrt(norm);
-                if (norm > 1e-9) for (int i = 0; i < sum.Length; i++) sum[i] /= norm;
-
-                perListing[grp.Key] = (sum, bestId, bestScore);
+                perListing[grp.Key] = (bestId, bestScore);
             }
 
-            // ─── 5. Score listings (not images) by cosine against pooled vector ──
+            // ─── 5. Rank listings by their best-image similarity ─────────────────
             var ranked = perListing
                 .Select(kv => new
                 {
                     ListingId = kv.Key,
-                    Score = CosineSimilarity(queryVector, kv.Value.mean),
+                    Score = kv.Value.bestScore,
                     BestImageId = kv.Value.bestImageId,
                 })
                 .OrderByDescending(x => x.Score)
