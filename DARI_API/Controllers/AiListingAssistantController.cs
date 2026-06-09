@@ -266,7 +266,7 @@ Property details:
 
 Requirements:
 1. Write a professional, engaging English description (3-4 sentences). Make it unique and vivid. Naturally weave in the most appealing amenities and the payment/completion details when relevant — do not just list them.
-2. Suggest 5 relevant English keyword tags for this property, drawing on its location, type, and standout amenities.
+2. Then, based on BOTH the description you just wrote and the property details above, suggest 5 relevant English keyword tags that capture this property's location, type, finishing, and standout amenities or lifestyle selling points.
 
 Reply ONLY with JSON in this exact format:
 {{
@@ -291,7 +291,7 @@ Reply ONLY with JSON in this exact format:
 
 المطلوب:
 1. اكتب وصفاً احترافياً جذاباً ومميزاً للعقار باللغة العربية (3-4 جمل). اجعل كل وصف فريداً ومختلفاً، وادمج أبرز وسائل الراحة وتفاصيل الدفع والتسليم بشكل طبيعي عند الحاجة دون مجرد سردها.
-2. اقترح قائمة من 5 تاجات (كلمات مفتاحية) مناسبة للعقار باللغة العربية، مستندة إلى الموقع والنوع وأبرز وسائل الراحة.
+2. ثم، بناءً على الوصف الذي كتبته للتو وعلى تفاصيل العقار أعلاه معاً، اقترح قائمة من 5 تاجات (كلمات مفتاحية) باللغة العربية تلخّص موقع العقار ونوعه وتشطيبه وأبرز وسائل الراحة أو مزايا نمط الحياة.
 
 أجب فقط بصيغة JSON بالشكل التالي بدون أي نص إضافي:
 {{
