@@ -311,6 +311,69 @@ namespace DARI_API.Controllers
                 existing.RejectionReason = null;
             }
 
+            // ── Sync images (keep existing by PublicId, add new, delete removed) ──
+            // The client re-sends every photo it still wants. Photos that already
+            // exist carry their original PublicId, so they are matched and KEPT —
+            // never re-uploaded (no duplicate Cloudinary assets / wasted storage).
+            // Genuinely new photos (PublicId not yet in the DB) are added, and any
+            // DB photo whose PublicId is no longer present was removed by the user,
+            // so it's deleted from Cloudinary too. Guard against an empty payload so
+            // a malformed request can never wipe a listing's gallery.
+            var incoming = req.Images ?? new List<CreateImageRequest>();
+            if (incoming.Count > 0)
+            {
+                var existingImages = await _db.Images.Where(i => i.ListingId == id).ToListAsync();
+                var incomingPublicIds = incoming
+                    .Where(i => !string.IsNullOrWhiteSpace(i.PublicId))
+                    .Select(i => i.PublicId!)
+                    .ToHashSet();
+
+                // Remove photos the user dropped — from the DB and from Cloudinary.
+                foreach (var old in existingImages)
+                {
+                    if (!string.IsNullOrWhiteSpace(old.PublicId) && incomingPublicIds.Contains(old.PublicId))
+                        continue;
+                    if (!string.IsNullOrWhiteSpace(old.PublicId))
+                    {
+                        try { await _cloudinary.DeleteAsync(old.PublicId); }
+                        catch { /* best-effort — never block the save on Cloudinary */ }
+                    }
+                    _db.Images.Remove(old);
+                }
+
+                // Keep order in sync for retained photos; insert only the new ones.
+                var keepByPublicId = existingImages
+                    .Where(i => !string.IsNullOrWhiteSpace(i.PublicId))
+                    .ToDictionary(i => i.PublicId!, i => i);
+
+                foreach (var img in incoming)
+                {
+                    if (!string.IsNullOrWhiteSpace(img.PublicId) &&
+                        keepByPublicId.TryGetValue(img.PublicId!, out var keep))
+                    {
+                        keep.SortOrder = img.SortOrder; // already stored — no re-upload
+                    }
+                    else
+                    {
+                        await _unitOfWork.Images.AddAsync(new Image
+                        {
+                            Id = Guid.NewGuid(),
+                            ListingId = id,
+                            Url = img.Url,
+                            PublicId = img.PublicId,
+                            Format = img.Format,
+                            Bytes = img.Bytes,
+                            Width = img.Width,
+                            Height = img.Height,
+                            SortOrder = img.SortOrder,
+                            UploadedAt = DateTime.UtcNow,
+                        });
+                    }
+                }
+
+                existing.CoverImageUrl = incoming.OrderBy(i => i.SortOrder).FirstOrDefault()?.Url ?? existing.CoverImageUrl;
+            }
+
             _unitOfWork.Listings.Update(existing);
             await _unitOfWork.SaveAsync();
             return Ok(ListingResponse.From(existing));
@@ -415,9 +478,16 @@ namespace DARI_API.Controllers
             if (listingKind != null) q = q.Where(x => x.ListingKind == listingKind);
             if (!string.IsNullOrWhiteSpace(finishing)) q = q.Where(x => x.Finishing == finishing);
             // A location pick can be a governorate (stored in City) or a district
-            // (stored in Region). Match either so "Sheikh Zayed" finds listings whose
-            // City is "Giza" and Region is "Sheikh Zayed".
-            if (!string.IsNullOrWhiteSpace(city)) q = q.Where(x => x.Address != null && (x.Address.City == city || x.Address.Region == city));
+            // (stored in Region). The frontend may send several comma-separated area
+            // names so an umbrella also matches its sub-areas (a governorate folds in
+            // its districts; "New Cairo" folds in "Fifth Settlement"). Match a listing
+            // whose City OR Region equals any of them — so "Sheikh Zayed" finds listings
+            // whose City is "Giza" and Region is "Sheikh Zayed".
+            if (!string.IsNullOrWhiteSpace(city))
+            {
+                var areaNames = city.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+                q = q.Where(x => x.Address != null && (areaNames.Contains(x.Address.City) || areaNames.Contains(x.Address.Region)));
+            }
             if (!string.IsNullOrWhiteSpace(region)) q = q.Where(x => x.Address != null && x.Address.Region == region);
             if (completionStatus != null) q = q.Where(x => x.CompletionStatus == completionStatus);
 
