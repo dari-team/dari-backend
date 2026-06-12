@@ -84,12 +84,24 @@ public class AiSearchPipeline
             && !string.IsNullOrWhiteSpace(plausibility.Cleaned.Location)
             && bestMatch == MatchQuality.None;
 
-        // The user named an area we don't recognize, so Layer 3 dropped it
-        // (search ran without it). Surface that — otherwise the user who asked
-        // for "Tokyo" silently gets Cairo listings with no idea their location
-        // was ignored.
-        var droppedCity = plausibility.Changes
+        // The user named an area we couldn't use, so the search silently ran
+        // without it — surface that, otherwise someone who asked for "Tokyo"
+        // gets Cairo listings with no idea their location was ignored. Two ways
+        // this happens:
+        //   a) the AI put an unknown value in the city field and Layer 3 dropped
+        //      it (CITY_UNKNOWN), or
+        //   b) the AI put the place in the free-text field, no city was resolved,
+        //      and it matched nothing. (When a city WAS resolved, the street
+        //      fallback notice below already covers it.)
+        var unresolvedArea = plausibility.Changes
             .FirstOrDefault(c => c.ReasonCode == PlausibilityReasons.CityUnknown)?.OriginalValue;
+        if (unresolvedArea is null
+            && string.IsNullOrWhiteSpace(plausibility.Cleaned.Location)
+            && !string.IsNullOrWhiteSpace(plausibility.Cleaned.LocationText)
+            && bestMatch == MatchQuality.None)
+        {
+            unresolvedArea = plausibility.Cleaned.LocationText;
+        }
 
         // ── Layer 6: Hydrate top results into ListingResponse ──────────────
         // We hydrate AFTER ranking so we don't pay the cost of loading
@@ -130,7 +142,7 @@ public class AiSearchPipeline
                 LatencyDbMs       = dbSw.ElapsedMilliseconds,
                 RetryUsed         = aiResult.RetryUsed,
                 Notice            = BuildNotice(streetMatch, fallbackApplied, ranked.Count,
-                                                plausibility.Cleaned, droppedCity, aiResult.Language),
+                                                plausibility.Cleaned, unresolvedArea, aiResult.Language),
             },
         };
 
@@ -164,22 +176,22 @@ public class AiSearchPipeline
     //   3. Street fallback — the city-fallback message from the original spec.
     //   4. Otherwise null (results match cleanly; no notice needed).
     private static string? BuildNotice(string streetMatch, bool fallbackApplied,
-                                       int resultCount, ParsedQuery q, string? droppedCity, string lang)
+                                       int resultCount, ParsedQuery q, string? unresolvedArea, string lang)
     {
         var isAr = lang == "ar";
 
-        // Case 1 — the named area was unrecognized and dropped. This takes
-        // priority over the generic zero-result text because the dropped
-        // location is the most surprising thing from the user's point of view.
-        if (!string.IsNullOrWhiteSpace(droppedCity))
+        // Case 1 — the named area couldn't be used, so the search ignored it.
+        // This takes priority over the generic zero-result text because the
+        // dropped location is the most surprising thing from the user's POV.
+        if (!string.IsNullOrWhiteSpace(unresolvedArea))
         {
             return resultCount == 0
                 ? (isAr
-                    ? $"لم نتعرف على المنطقة «{droppedCity}» ولا توجد نتائج مطابقة. جرب اسم منطقة معروفة."
-                    : $"We don't recognize the area “{droppedCity}” and found no matches. Try a known area name.")
+                    ? $"لم نتعرف على المنطقة «{unresolvedArea}» ولا توجد نتائج مطابقة. جرب اسم منطقة معروفة."
+                    : $"We don't recognize the area “{unresolvedArea}” and found no matches. Try a known area name.")
                 : (isAr
-                    ? $"لم نتعرف على المنطقة «{droppedCity}» — نعرض نتائج من كل المناطق."
-                    : $"We don't recognize the area “{droppedCity}” — showing results from all areas.");
+                    ? $"لم نتعرف على المنطقة «{unresolvedArea}» — نعرض نتائج من كل المناطق."
+                    : $"We don't recognize the area “{unresolvedArea}” — showing results from all areas.");
         }
 
         if (resultCount == 0)
