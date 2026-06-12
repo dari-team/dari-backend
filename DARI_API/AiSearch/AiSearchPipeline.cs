@@ -84,24 +84,7 @@ public class AiSearchPipeline
             && !string.IsNullOrWhiteSpace(plausibility.Cleaned.Location)
             && bestMatch == MatchQuality.None;
 
-        // The user named an area we couldn't use, so the search silently ran
-        // without it — surface that, otherwise someone who asked for "Tokyo"
-        // gets Cairo listings with no idea their location was ignored. Two ways
-        // this happens:
-        //   a) the AI put an unknown value in the city field and Layer 3 dropped
-        //      it (CITY_UNKNOWN), or
-        //   b) the AI put the place in the free-text field, no city was resolved,
-        //      and it matched nothing. (When a city WAS resolved, the street
-        //      fallback notice below already covers it.)
-        var unresolvedArea = plausibility.Changes
-            .FirstOrDefault(c => c.ReasonCode == PlausibilityReasons.CityUnknown)?.OriginalValue;
-        if (unresolvedArea is null
-            && string.IsNullOrWhiteSpace(plausibility.Cleaned.Location)
-            && !string.IsNullOrWhiteSpace(plausibility.Cleaned.LocationText)
-            && bestMatch == MatchQuality.None)
-        {
-            unresolvedArea = plausibility.Cleaned.LocationText;
-        }
+        var unresolvedArea = ResolveUnresolvedArea(plausibility.Changes, plausibility.Cleaned, bestMatch);
 
         // ── Layer 6: Hydrate top results into ListingResponse ──────────────
         // We hydrate AFTER ranking so we don't pay the cost of loading
@@ -167,6 +150,32 @@ public class AiSearchPipeline
         return response;
     }
 
+    // The user named an area we couldn't use, so the search silently ran without
+    // it — surface that, otherwise someone who asked for "Tokyo" gets Cairo
+    // listings with no idea their location was ignored. Two ways this happens:
+    //   a) the AI put an unknown value in the city field and Layer 3 dropped it
+    //      (CITY_UNKNOWN), or
+    //   b) the AI put the place in the free-text field, no city was resolved, and
+    //      it matched nothing. (When a city WAS resolved, the street-fallback
+    //      notice covers it instead, so this returns null there.)
+    // Returns the original area string the user typed, or null when the location
+    // was usable (or absent).
+    public static string? ResolveUnresolvedArea(
+        IEnumerable<PlausibilityChange> changes, ParsedQuery cleaned, MatchQuality bestMatch)
+    {
+        var droppedCity = changes
+            .FirstOrDefault(c => c.ReasonCode == PlausibilityReasons.CityUnknown)?.OriginalValue;
+        if (!string.IsNullOrWhiteSpace(droppedCity))
+            return droppedCity;
+
+        if (string.IsNullOrWhiteSpace(cleaned.Location)
+            && !string.IsNullOrWhiteSpace(cleaned.LocationText)
+            && bestMatch == MatchQuality.None)
+            return cleaned.LocationText;
+
+        return null;
+    }
+
     // Bilingual notices for Problem 8 — never hide why a search returned what it did.
     // Cases, in priority order:
     //   1. Unknown area — the user named a place we don't cover; Layer 3 dropped
@@ -175,8 +184,8 @@ public class AiSearchPipeline
     //      gap that left users staring at "No results" with no recourse).
     //   3. Street fallback — the city-fallback message from the original spec.
     //   4. Otherwise null (results match cleanly; no notice needed).
-    private static string? BuildNotice(string streetMatch, bool fallbackApplied,
-                                       int resultCount, ParsedQuery q, string? unresolvedArea, string lang)
+    public static string? BuildNotice(string streetMatch, bool fallbackApplied,
+                                      int resultCount, ParsedQuery q, string? unresolvedArea, string lang)
     {
         var isAr = lang == "ar";
 
