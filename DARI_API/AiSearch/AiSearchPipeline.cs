@@ -59,15 +59,31 @@ public class AiSearchPipeline
         // ── Layer 3: Plausibility ──────────────────────────────────────────
         var plausibility = PlausibilityChecker.Check(aiResult.Parsed);
 
-        // ── Layer 4: Search execution ──────────────────────────────────────
+        // ── Layer 4+5: Search execution + ranking ──────────────────────────
         var dbSw = Stopwatch.StartNew();
-        var candidates = await _executor.SearchAsync(plausibility.Cleaned, ct);
+        var ranked = Ranker.Rank(await _executor.SearchAsync(plausibility.Cleaned, ct), plausibility.Cleaned);
+
+        // Cairo fallback — the executor is location-anchored, so a query with no
+        // usable area (e.g. "all villas under 5M", a place we don't cover) matches
+        // nothing. Rather than show "no results", broaden to Cairo (the default
+        // governorate) keeping every other filter. One extra query, only on the
+        // empty path; the response still reports the user's original filters.
+        var broadenedToCairo = false;
+        if (ranked.Count == 0)
+        {
+            var broadened = CloneQuery(plausibility.Cleaned);
+            broadened.Location = "Cairo";
+            broadened.LocationText = null;
+            var broadenedRanked = Ranker.Rank(await _executor.SearchAsync(broadened, ct), broadened);
+            if (broadenedRanked.Count > 0)
+            {
+                ranked = broadenedRanked;
+                broadenedToCairo = true;
+            }
+        }
         dbSw.Stop();
 
-        // ── Layer 5: Ranking ───────────────────────────────────────────────
-        var ranked = Ranker.Rank(candidates, plausibility.Cleaned);
-
-        // Top-quality match across the whole result set drives the meta flags.
+        // Top-quality match across the (final) result set drives the meta flags.
         var bestMatch = ranked.FirstOrDefault()?.Match ?? MatchQuality.None;
         var streetMatch = bestMatch switch
         {
@@ -125,7 +141,8 @@ public class AiSearchPipeline
                 LatencyDbMs       = dbSw.ElapsedMilliseconds,
                 RetryUsed         = aiResult.RetryUsed,
                 Notice            = BuildNotice(streetMatch, fallbackApplied, ranked.Count,
-                                                plausibility.Cleaned, unresolvedArea, aiResult.Language),
+                                                plausibility.Cleaned, unresolvedArea, broadenedToCairo,
+                                                aiResult.Language),
             },
         };
 
@@ -178,18 +195,30 @@ public class AiSearchPipeline
 
     // Bilingual notices for Problem 8 — never hide why a search returned what it did.
     // Cases, in priority order:
-    //   1. Unknown area — the user named a place we don't cover; Layer 3 dropped
+    //   1. Cairo broadening — the original search matched nothing, so we widened
+    //      the area to Cairo. Most important to say, since the results aren't in
+    //      the area (if any) the user asked for.
+    //   2. Unknown area — the user named a place we don't cover; Layer 3 dropped
     //      it, so say so (otherwise "Tokyo" silently returns Cairo listings).
-    //   2. Zero results — explain which hard filters were applied (this is the
+    //   3. Zero results — explain which hard filters were applied (this is the
     //      gap that left users staring at "No results" with no recourse).
-    //   3. Street fallback — the city-fallback message from the original spec.
-    //   4. Otherwise null (results match cleanly; no notice needed).
+    //   4. Street fallback — the city-fallback message from the original spec.
+    //   5. Otherwise null (results match cleanly; no notice needed).
     public static string? BuildNotice(string streetMatch, bool fallbackApplied,
-                                      int resultCount, ParsedQuery q, string? unresolvedArea, string lang)
+                                      int resultCount, ParsedQuery q, string? unresolvedArea,
+                                      bool broadenedToCairo, string lang)
     {
         var isAr = lang == "ar";
 
-        // Case 1 — the named area couldn't be used, so the search ignored it.
+        // Case 1 — we broadened an empty search to Cairo.
+        if (broadenedToCairo)
+        {
+            return isAr
+                ? "لم نجد نتائج مطابقة لبحثك — نعرض عقارات في القاهرة."
+                : "No matches for your search — showing properties across Cairo.";
+        }
+
+        // Case 2 — the named area couldn't be used, so the search ignored it.
         // This takes priority over the generic zero-result text because the
         // dropped location is the most surprising thing from the user's POV.
         if (!string.IsNullOrWhiteSpace(unresolvedArea))
@@ -229,4 +258,26 @@ public class AiSearchPipeline
 
         return null;
     }
+
+    // Shallow copy so the Cairo fallback can search with a different area without
+    // mutating the parsed query we report back to the user.
+    private static ParsedQuery CloneQuery(ParsedQuery src) => new()
+    {
+        PropertyType      = src.PropertyType,
+        ListingType       = src.ListingType,
+        Location          = src.Location,
+        LocationText      = src.LocationText,
+        NearMetro         = src.NearMetro,
+        PriceMin          = src.PriceMin,
+        PriceMax          = src.PriceMax,
+        Bedrooms          = src.Bedrooms,
+        Bathrooms         = src.Bathrooms,
+        SuggestedBedrooms = src.SuggestedBedrooms,
+        AreaMin           = src.AreaMin,
+        FinishingLevel    = src.FinishingLevel,
+        PaymentMethod     = src.PaymentMethod,
+        MaxDownPayment    = src.MaxDownPayment,
+        CompletionStatus  = src.CompletionStatus,
+        Amenities         = src.Amenities is null ? null : new List<string>(src.Amenities),
+    };
 }

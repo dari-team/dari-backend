@@ -75,8 +75,8 @@ public class AiSearchNoticeTests
     public void Notice_unknown_area_with_results_is_localized()
     {
         var q = new ParsedQuery();
-        var ar = AiSearchPipeline.BuildNotice("none", false, 8, q, "طوكيو اليابان", "ar");
-        var en = AiSearchPipeline.BuildNotice("none", false, 8, q, "Tokyo", "en");
+        var ar = AiSearchPipeline.BuildNotice("none", false, 8, q, "طوكيو اليابان", false, "ar");
+        var en = AiSearchPipeline.BuildNotice("none", false, 8, q, "Tokyo", false, "en");
 
         Assert.Contains("طوكيو اليابان", ar);
         Assert.Contains("كل المناطق", ar);          // "...showing results from all areas"
@@ -88,8 +88,8 @@ public class AiSearchNoticeTests
     public void Notice_unknown_area_with_zero_results_suggests_a_known_area()
     {
         var q = new ParsedQuery();
-        var ar = AiSearchPipeline.BuildNotice("none", false, 0, q, "طوكيو", "ar");
-        var en = AiSearchPipeline.BuildNotice("none", false, 0, q, "Tokyo", "en");
+        var ar = AiSearchPipeline.BuildNotice("none", false, 0, q, "طوكيو", false, "ar");
+        var en = AiSearchPipeline.BuildNotice("none", false, 0, q, "Tokyo", false, "en");
 
         Assert.Contains("طوكيو", ar);
         Assert.Contains("منطقة معروفة", ar);         // "...try a known area name"
@@ -97,10 +97,24 @@ public class AiSearchNoticeTests
     }
 
     [Fact]
+    public void Notice_cairo_broaden_takes_priority_and_is_localized()
+    {
+        // Even with other notice-worthy state, the Cairo broadening is the
+        // headline because the results aren't from the requested area.
+        var q = new ParsedQuery();
+        var ar = AiSearchPipeline.BuildNotice("none", false, 12, q, "طوكيو", true, "ar");
+        var en = AiSearchPipeline.BuildNotice("none", false, 12, q, "Tokyo", true, "en");
+
+        Assert.Contains("القاهرة", ar);             // "...showing properties across Cairo"
+        Assert.Contains("Cairo", en);
+        Assert.DoesNotContain("طوكيو", ar);          // unknown-area text is superseded
+    }
+
+    [Fact]
     public void Notice_null_when_everything_matches_cleanly()
     {
         var q = new ParsedQuery { Location = "Nasr City" };
-        var notice = AiSearchPipeline.BuildNotice("exact", false, 5, q, null, "ar");
+        var notice = AiSearchPipeline.BuildNotice("exact", false, 5, q, null, false, "ar");
         Assert.Null(notice);
     }
 }
