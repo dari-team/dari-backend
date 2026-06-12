@@ -84,6 +84,13 @@ public class AiSearchPipeline
             && !string.IsNullOrWhiteSpace(plausibility.Cleaned.Location)
             && bestMatch == MatchQuality.None;
 
+        // The user named an area we don't recognize, so Layer 3 dropped it
+        // (search ran without it). Surface that — otherwise the user who asked
+        // for "Tokyo" silently gets Cairo listings with no idea their location
+        // was ignored.
+        var droppedCity = plausibility.Changes
+            .FirstOrDefault(c => c.ReasonCode == PlausibilityReasons.CityUnknown)?.OriginalValue;
+
         // ── Layer 6: Hydrate top results into ListingResponse ──────────────
         // We hydrate AFTER ranking so we don't pay the cost of loading
         // listings that the ranker would just push to the bottom.
@@ -123,7 +130,7 @@ public class AiSearchPipeline
                 LatencyDbMs       = dbSw.ElapsedMilliseconds,
                 RetryUsed         = aiResult.RetryUsed,
                 Notice            = BuildNotice(streetMatch, fallbackApplied, ranked.Count,
-                                                plausibility.Cleaned, aiResult.Language),
+                                                plausibility.Cleaned, droppedCity, aiResult.Language),
             },
         };
 
@@ -149,15 +156,31 @@ public class AiSearchPipeline
     }
 
     // Bilingual notices for Problem 8 — never hide why a search returned what it did.
-    // Three cases, in priority order:
-    //   1. Zero results — explain which hard filters were applied (this is the
+    // Cases, in priority order:
+    //   1. Unknown area — the user named a place we don't cover; Layer 3 dropped
+    //      it, so say so (otherwise "Tokyo" silently returns Cairo listings).
+    //   2. Zero results — explain which hard filters were applied (this is the
     //      gap that left users staring at "No results" with no recourse).
-    //   2. Street fallback — the city-fallback message from the original spec.
-    //   3. Otherwise null (results match cleanly; no notice needed).
+    //   3. Street fallback — the city-fallback message from the original spec.
+    //   4. Otherwise null (results match cleanly; no notice needed).
     private static string? BuildNotice(string streetMatch, bool fallbackApplied,
-                                       int resultCount, ParsedQuery q, string lang)
+                                       int resultCount, ParsedQuery q, string? droppedCity, string lang)
     {
         var isAr = lang == "ar";
+
+        // Case 1 — the named area was unrecognized and dropped. This takes
+        // priority over the generic zero-result text because the dropped
+        // location is the most surprising thing from the user's point of view.
+        if (!string.IsNullOrWhiteSpace(droppedCity))
+        {
+            return resultCount == 0
+                ? (isAr
+                    ? $"لم نتعرف على المنطقة «{droppedCity}» ولا توجد نتائج مطابقة. جرب اسم منطقة معروفة."
+                    : $"We don't recognize the area “{droppedCity}” and found no matches. Try a known area name.")
+                : (isAr
+                    ? $"لم نتعرف على المنطقة «{droppedCity}» — نعرض نتائج من كل المناطق."
+                    : $"We don't recognize the area “{droppedCity}” — showing results from all areas.");
+        }
 
         if (resultCount == 0)
         {
